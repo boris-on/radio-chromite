@@ -330,6 +330,61 @@ button { color: inherit; }
 .bottom-data { border:3px double #53647d; background:linear-gradient(180deg,rgba(38,52,76,.8),rgba(13,23,39,.8)); box-shadow:inset 0 0 0 2px #091220; }
 .footer-strip { border-top:4px double #596a83; background:#101a2a; color:#6e7e96; font-weight:800; }
 
+/* Tactical blue interface refinement */
+body { color:#9eb7c5; font-weight:500; }
+.brand-title,.now-playing h1,.artist,.column-head,.system-title,.audio-inspector-title,.transport-controls button,.playback-time,.volume-control {
+  font-family:"Arial Narrow","Nimbus Sans Narrow","Roboto Condensed","DIN Condensed",Arial,sans-serif;
+  font-weight:700;
+}
+.site-shell { background:radial-gradient(circle at 48% 42%,rgba(34,83,105,.28),transparent 36%),linear-gradient(118deg,#031019 0 34%,#0a2634 51%,#041019 100%); }
+.blueprint-grid { opacity:1; background-size:32px 32px,32px 32px,5px 5px,5px 5px; }
+.topline { border-top:1px solid rgba(131,170,188,.45); border-bottom:1px solid rgba(121,164,184,.5); background:linear-gradient(90deg,rgba(17,48,64,.82),rgba(5,20,30,.42) 65%,rgba(20,51,66,.68)); box-shadow:inset 0 1px rgba(202,226,235,.1); }
+.brand-mark { border:1px solid #6f9daf; background:rgba(15,49,64,.42); box-shadow:inset 0 0 0 4px rgba(4,17,27,.6); }
+.brand-title { color:#a7c2cd; letter-spacing:.3em; text-shadow:0 2px 2px #02090e; }
+
+.now-playing { border:1px solid rgba(104,152,172,.5); padding:12px; background:linear-gradient(135deg,rgba(101,147,165,.08),transparent 28%),rgba(10,35,48,.72); box-shadow:inset 0 0 0 1px rgba(7,22,31,.8),0 7px 20px rgba(0,0,0,.24); }
+.now-playing::before { width:70px; height:2px; background:#77b5ca; }
+.panel-index { margin:3px 2px 10px; color:#7195a5; font-size:8px; letter-spacing:.32em; }
+.now-playing h1 { margin:0 0 8px; padding:4px 8px; border:1px solid rgba(113,159,178,.44); background:linear-gradient(90deg,rgba(74,121,140,.32),rgba(18,54,69,.16)); color:#c0d2da; font-size:16px; letter-spacing:.12em; text-shadow:1px 2px 2px #020b10; box-shadow:inset 0 1px rgba(205,230,239,.08); }
+.track-identity { padding:7px 8px 9px; background:linear-gradient(90deg,rgba(22,63,79,.48),rgba(8,29,40,.28)); }
+.track-identity .artist { color:#d4e0e5; font-size:clamp(20px,2vw,28px); letter-spacing:.04em; text-shadow:1px 2px 2px #02090e; }
+.track { color:#aac0ca; font-size:13px; }
+.album-name,.track-code { color:#628899; }
+.telemetry-block { border:1px solid rgba(79,126,147,.42); background:rgba(5,24,34,.43); box-shadow:none; }
+.telemetry-row { color:#7f9eac; font-size:8px; letter-spacing:.13em; border-bottom:1px solid rgba(80,128,147,.16); }
+.telemetry-row span:last-child { color:#c4d3da; }
+.telemetry-active { color:#cffff6 !important; text-shadow:0 0 6px rgba(105,255,235,.38); }
+.playback-time { border:1px solid rgba(103,157,177,.55); background:linear-gradient(90deg,rgba(35,80,98,.54),rgba(11,42,56,.62)); color:#cce0e7; box-shadow:inset 0 1px rgba(200,229,238,.1); font-size:10px; }
+.transport-controls { gap:6px; }
+.transport-controls button { min-height:31px; border:1px solid rgba(106,157,177,.56); background:linear-gradient(180deg,rgba(60,105,123,.5),rgba(10,39,52,.7)); color:#bfd2da; text-shadow:0 1px #02090e; box-shadow:inset 0 1px rgba(212,233,240,.1); }
+.transport-controls button:hover:not(:disabled) { border-color:#8fc4d6; background:linear-gradient(180deg,rgba(78,128,146,.6),rgba(15,52,66,.76)); }
+.volume-control { border-top:1px solid rgba(102,151,170,.38); border-bottom:1px solid rgba(60,108,128,.3); color:#86a6b5; }
+.volume-control input::-webkit-slider-runnable-track { height:2px; border:0; background:linear-gradient(90deg,#38798e,#9ac2d0); box-shadow:none; }
+.volume-control input::-webkit-slider-thumb { width:12px; height:12px; margin-top:-5px; border:1px solid #bad0d8; background:#668894; box-shadow:0 0 5px rgba(132,210,231,.35); }
+
+.audio-inspector { border:1px solid rgba(78,128,149,.44); border-top:1px solid rgba(124,170,187,.58); padding:8px; background:linear-gradient(135deg,rgba(91,139,157,.06),transparent 25%),rgba(8,31,43,.56); box-shadow:inset 0 0 0 1px rgba(4,18,27,.66); }
+.audio-inspector-title { margin:-1px -1px 7px; padding:5px 7px; border:1px solid rgba(102,151,170,.42); background:linear-gradient(90deg,rgba(61,108,126,.34),rgba(16,50,64,.18)); color:#b7cdd6; font-size:11px; letter-spacing:.18em; text-shadow:1px 2px 2px #02090e; }
+.audio-inspector-grid > div + div { border-top:1px solid rgba(89,137,156,.28); }
+
+.right-column { padding:7px 10px 12px; border:1px solid rgba(108,154,173,.58); background:linear-gradient(135deg,rgba(100,148,164,.08),transparent 24%),rgba(7,29,40,.76); box-shadow:inset 0 0 0 1px rgba(4,17,25,.72),0 9px 24px rgba(0,0,0,.28); }
+.column-head,.system-title { min-height:24px; margin:0 0 7px; padding:4px 7px; border:1px solid rgba(106,152,170,.46); background:linear-gradient(90deg,rgba(73,119,137,.4),rgba(16,50,64,.2)); color:#b8cdd5; font-size:10px; letter-spacing:.14em; text-shadow:1px 2px 2px #02090e; }
+.column-head b { color:#7196a5; }
+.recent-list { border:1px solid rgba(71,116,136,.4); background:rgba(5,23,33,.4); }
+.recent-no { color:#7096a5; border-right:1px solid rgba(91,139,157,.36); }
+.recent-item { border-bottom:1px solid rgba(77,122,141,.26); }
+.recent-item strong { color:#c1d2d9; }
+.recent-item time,.recent-item em { color:#6f93a2; }
+.system-panel { border-top:1px solid rgba(98,145,164,.45); }
+.system-title { margin:0 0 8px; }
+.system-grid { border:1px solid rgba(70,115,135,.38); background:rgba(4,21,31,.4); }
+.system-grid span { color:#678b9a; }
+.system-grid b { color:#afc5ce; }
+.system-grid .connection-online { color:#bff4e9; }
+.barcode { border-top:1px solid rgba(86,133,152,.4); }
+
+.bottom-data { border:1px solid rgba(95,142,161,.48); background:linear-gradient(90deg,rgba(26,67,83,.64),rgba(7,29,41,.58)); box-shadow:inset 0 0 0 1px rgba(4,18,26,.68); }
+.footer-strip { border-top:1px solid rgba(90,137,155,.4); background:#061722; color:#567c8b; }
+
 @keyframes disc-spin { to { transform:rotate(360deg); } }
 @keyframes green-aurora { to { transform:rotate(360deg) scale(1.08); } }
 @keyframes green-sheen { 0%,100%{background-position:180% 0} 50%{background-position:-80% 0} }
