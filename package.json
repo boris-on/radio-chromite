@@ -1,0 +1,28 @@
+{
+  "name": "metalheart-radio",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "node backend/dev.mjs",
+    "dev:frontend": "next dev",
+    "backend": "node backend/server.mjs",
+    "normalize": "node backend/normalize-library.mjs",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "next": "15.2.4",
+    "react": "19.0.0",
+    "react-dom": "19.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "22.13.10",
+    "@types/react": "19.0.10",
+    "@types/react-dom": "19.0.4",
+    "autoprefixer": "10.4.21",
+    "postcss": "8.5.3",
+    "tailwindcss": "3.4.17",
+    "typescript": "5.8.2"
+  }
+}
