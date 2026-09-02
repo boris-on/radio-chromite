@@ -2,6 +2,34 @@
 
 Next.js frontend and Nim audio streaming backend.
 
+## Configuration
+
+Copy `.env.example` to `.env`. The root `.env` file is the single place for
+machine-specific paths:
+
+```dotenv
+MUSIC_LIBRARY_PATH=/srv/radio-chromite/music
+# NORMALIZED_LIBRARY_PATH=/srv/radio-chromite/music-normalized
+# NIM_BIN_DIR=/opt/nim/bin
+# C_COMPILER_BIN_DIR=/opt/gcc/bin
+# FFMPEG_BIN_DIR=/opt/ffmpeg/bin
+RADIO_DOMAIN=radio.example.com
+```
+
+On Windows, use native paths instead:
+
+```dotenv
+MUSIC_LIBRARY_PATH=C:\Music\Radio
+# NORMALIZED_LIBRARY_PATH=C:\Music\Radio-normalized
+# NIM_BIN_DIR=C:\nim\nim-2.2.10\bin
+# C_COMPILER_BIN_DIR=C:\msys64\mingw64\bin
+# FFMPEG_BIN_DIR=C:\ffmpeg\bin
+RADIO_DOMAIN=radio.example.com
+```
+
+Relative paths are resolved from the project directory. If no music path is set,
+the local fallback is the `music` directory in the project root.
+
 ## Linux server with Docker Compose
 
 The deployment contains three containers:
@@ -10,23 +38,24 @@ The deployment contains three containers:
 - `frontend` — internal Next.js interface;
 - `backend` — internal Nim audio server with FFmpeg.
 
-The browser uses same-origin `/api` requests through the frontend proxy. The frontend and backend ports are not exposed publicly.
+The browser uses same-origin `/api` requests through the frontend proxy. The
+frontend and backend ports are not exposed publicly.
 
-### 1. Configure the music directory
+### 1. Configure the server
 
 ```bash
 cp .env.example .env
 nano .env
 ```
 
-Set an absolute Linux path:
+Set at least:
 
 ```dotenv
-MUSIC_PATH=/srv/radio-chromite/music
+MUSIC_LIBRARY_PATH=/srv/radio-chromite/music
 RADIO_DOMAIN=radio.example.com
 ```
 
-`MUSIC_PATH` must contain album directories with MP3 files. It is mounted inside the backend container as `/music` in read-only mode.
+The library must contain album directories with MP3 files:
 
 ```text
 /srv/radio-chromite/music/
@@ -37,7 +66,7 @@ RADIO_DOMAIN=radio.example.com
     └── Artist - Track Three.mp3
 ```
 
-Make sure the container can read the library:
+Make sure Docker can read it:
 
 ```bash
 chmod -R a+rX /srv/radio-chromite/music
@@ -49,40 +78,69 @@ chmod -R a+rX /srv/radio-chromite/music
 docker compose up -d --build
 ```
 
-Create an `A` DNS record (and `AAAA` when IPv6 is configured) for `RADIO_DOMAIN` pointing to the server. Allow inbound TCP ports `80` and `443`, plus UDP `443` for HTTP/3. Then open `https://RADIO_DOMAIN`. Caddy obtains and renews the certificate automatically; the first issuance can take a short time after DNS propagation.
+Create an `A` DNS record (and `AAAA` when IPv6 is configured) for
+`RADIO_DOMAIN`. Allow inbound TCP ports `80` and `443`, plus UDP `443` for
+HTTP/3. Caddy obtains and renews the HTTPS certificate automatically.
+
+Until `RADIO_DOMAIN` is configured, Compose still starts and Caddy serves the
+site over plain HTTP on port `80`. After adding the domain to `.env`, run
+`docker compose up -d` again to enable automatic HTTPS.
 
 ### 3. Status and logs
 
 ```bash
 docker compose ps
 docker compose logs -f caddy backend frontend
-curl https://RADIO_DOMAIN/api/health
+curl https://radio.example.com/api/health
 ```
 
-### Updating and stopping
+Update or stop:
 
 ```bash
 git pull
 docker compose up -d --build
-```
-
-```bash
 docker compose down
 ```
 
-The extracted cover cache and Caddy certificates are kept in named volumes. `docker compose down` preserves them; `docker compose down -v` removes them. Do not use `-v` unless certificate and cover-cache removal is intended.
+The cover cache and Caddy certificates are stored in named volumes. A normal
+`docker compose down` preserves them; `docker compose down -v` removes them.
 
-The Nim backend rescans the active music directory every 30 seconds. Newly added
-MP3 files become available automatically without restarting the container.
+The backend rescans the active music directory every 30 seconds, so newly added
+MP3 files appear without restarting the container.
 
 ## Local development
 
-```powershell
+Install Node.js, Nim, FFmpeg and FFprobe, then create `.env` as described above.
+
+Start the frontend:
+
+```bash
 npm install
 npm run dev:frontend
 ```
 
+Start the backend in a second terminal:
+
+```bash
+npm run backend
 ```
-cd "C:\Users\Admin\Downloads\metalheart-radio(3)\metalheart-radio\backend-nim"
-.\run.ps1
+
+If a local tool is not available through `PATH`, set `NIM_BIN_DIR`,
+`C_COMPILER_BIN_DIR` or `FFMPEG_BIN_DIR` in the root `.env` file.
+
+The same commands work on Windows and Linux. There are also compatibility
+launchers:
+
+```powershell
+.\backend-nim\run.ps1
+```
+
+```bash
+sh backend-nim/run.sh
+```
+
+Normalize the configured library on either platform:
+
+```bash
+npm run normalize
 ```

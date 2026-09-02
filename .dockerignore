@@ -2,7 +2,6 @@
 .next
 .next-*
 node_modules
-backend
 backend-lua
 backend-nim/bin
 backend-nim/.cover-cache

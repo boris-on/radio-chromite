@@ -2,7 +2,7 @@ services:
   caddy:
     image: caddy:2-alpine
     environment:
-      RADIO_DOMAIN: ${RADIO_DOMAIN:?Set RADIO_DOMAIN in .env}
+      RADIO_DOMAIN: ${RADIO_DOMAIN:-:80}
     ports:
       - "80:80"
       - "443:443"
@@ -25,7 +25,7 @@ services:
       MUSIC_LIBRARY_PATH: /music
     volumes:
       - type: bind
-        source: ${MUSIC_PATH:?Set MUSIC_PATH in .env}
+        source: ${MUSIC_LIBRARY_PATH:?Set MUSIC_LIBRARY_PATH in .env}
         target: /music
         read_only: true
       - cover-cache:/app/.cover-cache

@@ -1,10 +1,18 @@
 import { spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
-import { dirname, extname, join, relative } from "node:path";
+import { delimiter, dirname, extname, join, relative, resolve } from "node:path";
+import { loadEnvFile } from "node:process";
+import { fileURLToPath } from "node:url";
 
-const DEFAULT_SOURCE = "C:\\Users\\Admin\\Desktop\\vk";
-const sourceRoot = process.argv[2] || process.env.MUSIC_LIBRARY_PATH || DEFAULT_SOURCE;
-const outputRoot = process.argv[3] || process.env.NORMALIZED_LIBRARY_PATH || `${sourceRoot}-normalized`;
+const projectRoot = fileURLToPath(new URL("../", import.meta.url));
+const envFile = join(projectRoot, ".env");
+if (existsSync(envFile)) loadEnvFile(envFile);
+if (process.env.FFMPEG_BIN_DIR) {
+  process.env.PATH = [process.env.FFMPEG_BIN_DIR, process.env.PATH || ""].filter(Boolean).join(delimiter);
+}
+
+const sourceRoot = resolve(process.argv[2] || process.env.MUSIC_LIBRARY_PATH || join(projectRoot, "music"));
+const outputRoot = resolve(process.argv[3] || process.env.NORMALIZED_LIBRARY_PATH || `${sourceRoot}-normalized`);
 const TARGET_I = "-16";
 const TARGET_TP = "-1.5";
 const TARGET_LRA = "11";
@@ -110,5 +118,5 @@ if (failed > 0) {
   mkdirSync(outputRoot, { recursive: true });
   writeFileSync(completionMarker, new Date().toISOString());
   console.log(`[normalize] finished: ${completed} written, ${skipped} skipped`);
-  console.log("Restart the audio backend to use the normalized library.");
+  console.log("The audio backend will detect the updated library automatically.");
 }

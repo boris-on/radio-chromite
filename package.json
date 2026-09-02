@@ -3,10 +3,10 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "node backend/dev.mjs",
+    "dev": "next dev -H 0.0.0.0",
     "dev:frontend": "next dev -H 0.0.0.0",
-    "backend": "node backend/server.mjs",
-    "normalize": "node backend/normalize-library.mjs",
+    "backend": "node scripts/run-nim.mjs",
+    "normalize": "node scripts/normalize-library.mjs",
     "build": "next build",
     "start": "next start -H 0.0.0.0",
     "lint": "next lint"

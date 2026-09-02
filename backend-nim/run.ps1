@@ -1,15 +1,5 @@
-$nimHome = Get-ChildItem -LiteralPath 'C:\nim' -Directory -Filter 'nim-*' |
-  Sort-Object Name -Descending |
-  Select-Object -First 1
-
-if (-not $nimHome) {
-  throw 'Nim installation was not found under C:\nim.'
-}
-
-$nimBin = Join-Path $nimHome.FullName 'bin'
-$env:PATH = $nimBin + ';C:\msys64\mingw64\bin;' + $env:PATH
-
 $backendRoot = [System.IO.Path]::GetFullPath($PSScriptRoot).TrimEnd('\') + '\'
+$projectRoot = Split-Path -Parent $PSScriptRoot
 $runningBackends = Get-CimInstance Win32_Process -Filter "Name = 'radio_chromite_backend.exe'" |
   Where-Object {
     $_.ExecutablePath -and
@@ -25,5 +15,11 @@ foreach ($backend in $runningBackends) {
   Wait-Process -Id $backend.ProcessId -ErrorAction SilentlyContinue
 }
 
-& (Join-Path $nimBin 'nimble.exe') run
-exit $LASTEXITCODE
+Push-Location $projectRoot
+try {
+  & npm run backend
+  $backendExitCode = $LASTEXITCODE
+} finally {
+  Pop-Location
+}
+exit $backendExitCode

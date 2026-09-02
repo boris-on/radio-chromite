@@ -29,7 +29,6 @@ pnpm-debug.log*
 *.tsbuildinfo
 
 # Local runtime files
-backend/loudness-cache.json
 **/.cover-cache/
 *.normalizing.mp3
 .normalization-complete

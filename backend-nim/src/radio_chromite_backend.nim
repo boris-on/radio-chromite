@@ -11,7 +11,6 @@ type
     requestId: string
 
 const
-  DefaultSource = r"C:\Users\Admin\Desktop\vk"
   ChunkSize = 64 * 1024
   MetadataCacheLimit = 5
   AlbumRepeatWindow = 20
@@ -20,11 +19,11 @@ const
   LibraryRescanIntervalMs = 30_000
 
 let
+  projectRoot = getAppDir().parentDir
   port = Port(parseInt(getEnv("AUDIO_SERVER_PORT", "8789")))
-  sourceLibrary = getEnv("SOURCE_LIBRARY_PATH", DefaultSource)
-  normalizedLibrary = getEnv("NORMALIZED_LIBRARY_PATH", sourceLibrary & "-normalized")
-  explicitLibrary = getEnv("MUSIC_LIBRARY_PATH")
-  musicLibrary = if explicitLibrary.len > 0: explicitLibrary elif fileExists(normalizedLibrary / ".normalization-complete"): normalizedLibrary else: sourceLibrary
+  sourceLibrary = absolutePath(getEnv("MUSIC_LIBRARY_PATH", projectRoot / "music"), projectRoot)
+  normalizedLibrary = absolutePath(getEnv("NORMALIZED_LIBRARY_PATH", sourceLibrary & "-normalized"), projectRoot)
+  musicLibrary = if fileExists(normalizedLibrary / ".normalization-complete"): normalizedLibrary else: sourceLibrary
   cacheDirectory = getCurrentDir() / ".cover-cache"
   startedAt = epochTime()
 
