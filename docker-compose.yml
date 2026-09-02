@@ -12,8 +12,8 @@ services:
         target: /music
         read_only: true
       - cover-cache:/app/.cover-cache
-    expose:
-      - "8789"
+    ports:
+      - "${BACKEND_PORT:-8789}:8789"
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8789/api/health"]

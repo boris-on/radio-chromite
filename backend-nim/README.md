@@ -32,9 +32,9 @@ cd backend-nim
 
 `run.ps1` automatically adds the installed Nim and MSYS2 MinGW directories to the process PATH before compiling and starting the server.
 
-The default address is `http://localhost:8789`, so this implementation can run alongside Node (`8787`) and Lua (`8788`).
+The server listens on all network interfaces at port `8789` by default. From another device on the LAN it is available at `http://COMPUTER_IP:8789`.
 
-Connect the frontend without changing its source:
+The frontend uses its same-origin `/api` proxy by default, so no public API URL is required. To connect directly instead:
 
 ```powershell
 $env:NEXT_PUBLIC_AUDIO_API_URL='http://localhost:8789'

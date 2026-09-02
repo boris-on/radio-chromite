@@ -30,8 +30,21 @@ pnpm-debug.log*
 
 # Local runtime files
 backend/loudness-cache.json
+**/.cover-cache/
 *.normalizing.mp3
 .normalization-complete
+
+# Nim build and local tooling artifacts
+backend-nim/*.exe
+backend-nim/src/*.exe
+backend-nim/nimble.paths
+backend-nim/nimcache/
+backend-nim/.nimcache/
+
+# Benchmark output
+benchmarks/results/
+benchmarks/*.json
+benchmarks/*.csv
 
 # Editor and operating-system files
 .vscode/

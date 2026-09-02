@@ -7,9 +7,9 @@ Next.js frontend and Nim audio streaming backend.
 The deployment contains two containers:
 
 - `frontend` — public Next.js interface on port `3000` by default;
-- `backend` — internal Nim server with FFmpeg on port `8789`.
+- `backend` — Nim audio server with FFmpeg on public port `8789` by default.
 
-The browser uses same-origin `/api` requests. The frontend container proxies them to the backend, so port `8789` does not need to be exposed publicly.
+The browser uses same-origin `/api` requests through the frontend proxy. Port `8789` is also published for direct API access from the local network.
 
 ### 1. Configure the music directory
 
@@ -23,6 +23,7 @@ Set an absolute Linux path:
 ```dotenv
 MUSIC_PATH=/srv/radio-chromite/music
 WEB_PORT=3000
+BACKEND_PORT=8789
 ```
 
 `MUSIC_PATH` must contain album directories with MP3 files. It is mounted inside the backend container as `/music` in read-only mode.
@@ -75,5 +76,10 @@ The extracted cover cache is kept in the named volume `cover-cache`. `docker com
 
 ```powershell
 npm install
-npm run dev
+npm run dev:frontend
+```
+
+```
+cd "C:\Users\Admin\Downloads\metalheart-radio(3)\metalheart-radio\backend-nim"
+.\run.ps1
 ```

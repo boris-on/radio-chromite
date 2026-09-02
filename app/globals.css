@@ -455,6 +455,87 @@ body { color:#9eb7c5; font-weight:500; }
 @keyframes metal-drift-a { to { transform:translate(calc(var(--mx) * -.8 + 10px), calc(var(--my) * -.8 + 8px)) rotate(-18deg) scale(1.02); } }
 @keyframes metal-drift-b { to { transform:translate(calc(var(--mx) * .55 - 8px), calc(var(--my) * .55 + 12px)) rotate(-15deg) scale(1.015); } }
 
+/* Full HD: keep the desktop modules large and close the gaps between them. */
+@media (min-width: 1500px) and (max-width: 2200px) {
+  .radio-zone {
+    padding-bottom:210px;
+  }
+
+  .disc-assembly {
+    transform:scale(1.15);
+    transform-origin:top left;
+  }
+
+  .now-playing {
+    transform:scale(1.15);
+    transform-origin:top left;
+  }
+
+  .right-column {
+    right:48px;
+    transform:scale(1.15);
+    transform-origin:top right;
+  }
+
+  .moscow-panel {
+    transform:scale(1.15);
+    transform-origin:top left;
+  }
+}
+
+/* Ultrawide: center the Full HD composition and leave framed side gutters. */
+@media (min-width: 2201px) and (min-aspect-ratio: 2/1) {
+  body {
+    background:
+      radial-gradient(circle, rgba(92,130,158,.18) 0 1px, transparent 1.5px) 0 0 / 9px 9px,
+      linear-gradient(90deg,#101a2b,#16243a 24%,#16243a 76%,#101a2b);
+  }
+
+  .site-shell {
+    width:1920px;
+    margin-inline:auto;
+    border-inline:1px solid rgba(101,145,169,.28);
+    box-shadow:0 0 70px rgba(0,0,0,.58);
+  }
+
+  .radio-zone {
+    padding:52px 518px 210px 154px;
+  }
+
+  .disc-assembly {
+    transform:scale(1.15);
+    transform-origin:top left;
+  }
+
+  .now-playing {
+    transform:scale(1.15);
+    transform-origin:top left;
+  }
+
+  .right-column {
+    right:48px;
+    transform:scale(1.15);
+    transform-origin:top right;
+  }
+
+  .moscow-panel {
+    left:96px;
+    transform:scale(1.15);
+    transform-origin:top left;
+  }
+
+  .bottom-data { margin-left:154px; margin-right:134px; }
+  .footer-strip { padding-left:154px; }
+  .rail-left { left:90px; }
+  .rail-right { right:453px; }
+
+  .metal-a { width:902px; height:960px; left:-384px; top:-230px; }
+  .metal-b { width:1267px; height:576px; right:-480px; }
+  .metal-c { width:691px; height:672px; left:595px; bottom:-461px; }
+  .metal-d { width:595px; height:691px; left:-192px; bottom:-154px; }
+  .metal-e { width:998px; height:384px; right:-269px; bottom:-38px; }
+}
+
 @media (max-width: 1100px) {
   .radio-zone { padding-right: 31vw; padding-left: 6vw; grid-template-columns:1fr; min-height:820px; align-content:center; }
   .now-playing { width:350px; margin:-40px 0 0 50%; align-self:auto; }

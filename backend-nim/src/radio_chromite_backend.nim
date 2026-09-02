@@ -1,4 +1,4 @@
-import std/[algorithm, asynchttpserver, asyncdispatch, asyncnet, httpcore, json, nativesockets, os, osproc, sequtils, sha1, strformat, strutils, tables, times]
+import std/[algorithm, asynchttpserver, asyncdispatch, asyncnet, httpcore, json, nativesockets, os, osproc, random, sequtils, sha1, strformat, strutils, tables, times]
 
 type
   Track = ref object
@@ -202,11 +202,20 @@ proc cachedMetadata(track: Track): JsonNode =
   metadataCache[track.id] = result
   while metadataCache.len > MetadataCacheLimit: metadataCache.del(metadataCache.keys.toSeq()[0])
 
+proc publicTrack(track: Track): JsonNode =
+  %*{"id":track.id,"artist":track.artist,"title":track.title,"album":track.album,
+    "size":track.size,"streamUrl":"/api/stream/" & track.id,"coverUrl":"/api/cover/" & track.id}
+
 proc publicTracks(): JsonNode =
   result = newJArray()
   for track in tracks:
-    result.add(%*{"id":track.id,"artist":track.artist,"title":track.title,"album":track.album,
-      "size":track.size,"streamUrl":"/api/stream/" & track.id,"coverUrl":"/api/cover/" & track.id})
+    result.add(publicTrack(track))
+
+proc randomTrack(excludeId = ""): Track =
+  if tracks.len == 0: return nil
+  result = tracks[rand(tracks.high)]
+  while tracks.len > 1 and result.id == excludeId:
+    result = tracks[rand(tracks.high)]
 
 proc callback(request: Request) {.async.} =
   request.client.setSockOpt(OptNoDelay, true)
@@ -223,6 +232,13 @@ proc callback(request: Request) {.async.} =
         "bytesRx":metrics.bytesRx,"openStreams":metrics.openStreams,"httpStatus":metrics.httpStatus,
         "uptimeSeconds":int(epochTime()-startedAt),"memRss":getOccupiedMem()}})
     elif path == "/api/tracks": await sendJsonText(request, Http200, trackCatalogueJson)
+    elif path == "/api/random-track" or path.startsWith("/api/random-track/"):
+      let excludeId = if path.len > 18: path[18 .. ^1] else: ""
+      let selected = randomTrack(excludeId)
+      if selected.isNil:
+        await sendJson(request, Http404, %*{"error": "Library is empty"})
+      else:
+        await sendJson(request, Http200, publicTrack(selected))
     elif path.startsWith("/api/stream/"):
       let id = path[12 .. ^1]
       if tracksById.hasKey(id):
@@ -257,6 +273,7 @@ proc callback(request: Request) {.async.} =
 
 createDir(cacheDirectory)
 scanLibrary()
+randomize()
 trackCatalogueJson = $publicTracks()
 echo &"[audio-server-nim] {tracks.len} tracks from {musicLibrary}"
 echo &"[audio-server-nim] listening on http://localhost:{port.int}"

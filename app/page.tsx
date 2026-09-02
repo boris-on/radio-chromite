@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import MoscowRadarMap from "../components/MoscowRadarMap";
 
-const AUDIO_API = process.env.NEXT_PUBLIC_AUDIO_API_URL ?? "http://localhost:8789";
+const AUDIO_API = (process.env.NEXT_PUBLIC_AUDIO_API_URL ?? "").replace(/\/$/, "");
 
 type Track = {
   id: string;
@@ -36,7 +36,7 @@ type MoscowWeather = {
 };
 
 const apiUrl = (path: string) => `${AUDIO_API}${path}`;
-const audioEndpoint = AUDIO_API.replace(/^https?:\/\//, "").toUpperCase();
+const audioEndpoint = AUDIO_API ? AUDIO_API.replace(/^https?:\/\//, "").toUpperCase() : "SAME_ORIGIN/API";
 const audioProtocol = AUDIO_API.startsWith("https://") ? "HTTPS" : "HTTP";
 const pad = (value: number, length = 2) => Math.max(0, Math.round(value)).toString().padStart(length, "0");
 const hex = (value: number) => `0x${Math.max(0, Math.round(value)).toString(16).toUpperCase().padStart(8, "0")}`;
@@ -64,10 +64,18 @@ function MetalAsset({ src, className, alt }: { src: string; className: string; a
   );
 }
 
+async function requestRandomTrack(excludeId?: string, signal?: AbortSignal): Promise<Track> {
+  const suffix = excludeId ? `/${encodeURIComponent(excludeId)}` : "";
+  const response = await fetch(apiUrl(`/api/random-track${suffix}`), { signal, cache: "no-store" });
+  if (!response.ok) throw new Error("No random track available");
+  return response.json() as Promise<Track>;
+}
+
 export default function Home() {
   const audioRef = useRef<HTMLAudioElement>(null);
   const currentTrackRef = useRef<Track | null>(null);
   const upcomingTrackRef = useRef<Track | null>(null);
+  const upcomingRequestRef = useRef<Promise<Track | null> | null>(null);
   const previousLatencyRef = useRef<number | null>(null);
   const serverStateKnownRef = useRef(false);
   const wasServerOnlineRef = useRef(false);
@@ -80,7 +88,6 @@ export default function Home() {
   const [moscowTime, setMoscowTime] = useState("00:00:00");
   const [moscowWeather, setMoscowWeather] = useState<MoscowWeather | null>(null);
   const [moscowWeatherOnline, setMoscowWeatherOnline] = useState(false);
-  const [library, setLibrary] = useState<Track[]>([]);
   const [currentTrack, setCurrentTrack] = useState<Track | null>(null);
   const [history, setHistory] = useState<Track[]>([]);
   const [forwardHistory, setForwardHistory] = useState<Track[]>([]);
@@ -188,24 +195,13 @@ export default function Home() {
 
   useEffect(() => {
     const controller = new AbortController();
-    fetch(apiUrl("/api/tracks"), { signal: controller.signal })
-      .then((response) => {
-        if (!response.ok) throw new Error("Library unavailable");
-        return response.json() as Promise<Track[]>;
-      })
-      .then((tracks) => {
-        setLibrary(tracks);
-        const initialTrack = tracks[Math.floor(Math.random() * tracks.length)] || null;
-        const upcomingCandidates = initialTrack ? tracks.filter((track) => track.id !== initialTrack.id) : tracks;
-        upcomingTrackRef.current = upcomingCandidates[Math.floor(Math.random() * upcomingCandidates.length)] || null;
-        if (upcomingTrackRef.current) {
-          const cover = new window.Image();
-          cover.src = apiUrl(upcomingTrackRef.current.coverUrl);
-        }
+    requestRandomTrack(undefined, controller.signal)
+      .then((initialTrack) => {
         currentTrackRef.current = initialTrack;
         setCurrentTrack(initialTrack);
-        setPlayedTracks(initialTrack ? [initialTrack] : []);
-        if (initialTrack && audioRef.current) {
+        setPlayedTracks([initialTrack]);
+        void setUpcomingTrack(initialTrack.id, controller.signal);
+        if (audioRef.current) {
           const audio = audioRef.current;
           audio.src = apiUrl(initialTrack.streamUrl);
           audio.volume = volume;
@@ -224,7 +220,7 @@ export default function Home() {
             })
             .finally(() => setBuffering(false));
         }
-        setLibraryError(tracks.length === 0);
+        setLibraryError(false);
       })
       .catch((error: unknown) => {
         if ((error as Error).name !== "AbortError") setLibraryError(true);
@@ -232,20 +228,22 @@ export default function Home() {
     return () => controller.abort();
   }, []);
 
-  const randomTrack = (excludeId?: string) => {
-    if (library.length === 0) return null;
-    const candidates = library.length > 1 ? library.filter((track) => track.id !== excludeId) : library;
-    return candidates[Math.floor(Math.random() * candidates.length)] || null;
-  };
-
-  const setUpcomingTrack = (excludeId?: string) => {
-    const upcoming = randomTrack(excludeId);
-    upcomingTrackRef.current = upcoming;
-    if (upcoming) {
-      const cover = new window.Image();
-      cover.src = apiUrl(upcoming.coverUrl);
-    }
-    return upcoming;
+  const setUpcomingTrack = (excludeId?: string, signal?: AbortSignal) => {
+    let request: Promise<Track | null>;
+    request = requestRandomTrack(excludeId, signal)
+      .then((upcoming) => {
+        if (upcomingRequestRef.current !== request) return null;
+        upcomingTrackRef.current = upcoming;
+        const cover = new window.Image();
+        cover.src = apiUrl(upcoming.coverUrl);
+        return upcoming;
+      })
+      .catch(() => null)
+      .finally(() => {
+        if (upcomingRequestRef.current === request) upcomingRequestRef.current = null;
+      });
+    upcomingRequestRef.current = request;
+    return request;
   };
 
   const switchTrack = async (track: Track, shouldPlay: boolean, rememberCurrent = true, updateRecent = true) => {
@@ -296,11 +294,12 @@ export default function Home() {
       return;
     }
 
-    const next = upcomingTrackRef.current || randomTrack(currentTrackRef.current?.id);
+    const next = upcomingTrackRef.current || await (upcomingRequestRef.current || requestRandomTrack(currentTrackRef.current?.id));
     if (next) {
+      upcomingTrackRef.current = null;
       setForwardHistory([]);
       await switchTrack(next, forcePlay);
-      setUpcomingTrack(next.id);
+      void setUpcomingTrack(next.id);
     }
   };
 
@@ -478,7 +477,7 @@ export default function Home() {
           <div className="transport-controls">
             <button type="button" onClick={() => void previousTrack()} disabled={history.length === 0} aria-label="Previous track"><span>◀◀</span><small>PREV</small></button>
             <button type="button" onClick={togglePlayback} disabled={!currentTrack} aria-label={isPlaying ? "Pause radio" : "Play radio"}><span>{isPlaying ? "Ⅱ" : "▶"}</span><small>{isPlaying ? "PAUSE" : "PLAY"}</small></button>
-            <button type="button" onClick={() => void nextTrack()} disabled={library.length < 2} aria-label="Next track"><span>▶▶</span><small>NEXT</small></button>
+            <button type="button" onClick={() => void nextTrack()} disabled={!currentTrack} aria-label="Next track"><span>▶▶</span><small>NEXT</small></button>
           </div>
           <label className="volume-control">
             <span>OUTPUT LEVEL</span>

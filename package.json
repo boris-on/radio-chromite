@@ -4,11 +4,11 @@
   "private": true,
   "scripts": {
     "dev": "node backend/dev.mjs",
-    "dev:frontend": "next dev",
+    "dev:frontend": "next dev -H 0.0.0.0",
     "backend": "node backend/server.mjs",
     "normalize": "node backend/normalize-library.mjs",
     "build": "next build",
-    "start": "next start",
+    "start": "next start -H 0.0.0.0",
     "lint": "next lint"
   },
   "dependencies": {
