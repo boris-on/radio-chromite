@@ -1,8 +1,0 @@
-bin/
-src/radio_chromite_backend.exe
-src/radio_chromite_backend
-.cover-cache/
-*.log
-nimble.develop
-nimble.paths
-nimbledeps

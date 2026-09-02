@@ -33,13 +33,26 @@ backend/loudness-cache.json
 **/.cover-cache/
 *.normalizing.mp3
 .normalization-complete
+*.pid
 
 # Nim build and local tooling artifacts
 backend-nim/*.exe
+backend-nim/radio_chromite_backend
 backend-nim/src/*.exe
+backend-nim/src/radio_chromite_backend
 backend-nim/nimble.paths
+backend-nim/nimble.develop
+backend-nim/nimbledeps/
 backend-nim/nimcache/
 backend-nim/.nimcache/
+backend-nim/*.pdb
+backend-nim/*.ilk
+backend-nim/*.exp
+
+# Caddy state when using local bind mounts instead of Docker volumes
+.caddy/
+caddy-data/
+caddy-config/
 
 # Benchmark output
 benchmarks/results/

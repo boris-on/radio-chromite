@@ -14,6 +14,10 @@ const
   DefaultSource = r"C:\Users\Admin\Desktop\vk"
   ChunkSize = 64 * 1024
   MetadataCacheLimit = 5
+  AlbumRepeatWindow = 20
+  ArtistRepeatWindow = 20
+  TrackRepeatWindow = 50
+  LibraryRescanIntervalMs = 30_000
 
 let
   port = Port(parseInt(getEnv("AUDIO_SERVER_PORT", "8789")))
@@ -30,6 +34,9 @@ var
   metadataCache = initOrderedTable[string, JsonNode]()
   metrics = ServerMetrics(httpStatus: 200, requestId: "RX-000000")
   trackCatalogueJson = "[]"
+  selectionHistory: seq[Track]
+  libraryScanCount: int64
+  lastLibraryScanAt: float
 
 proc splitTrackName(fileName: string): tuple[artist, title: string] =
   let base = splitFile(fileName).name
@@ -42,6 +49,8 @@ proc trackId(relativePath: string): string =
 
 proc scanLibrary() =
   if not dirExists(musicLibrary): raise newException(IOError, "Music library not found: " & musicLibrary)
+  var scannedTracks: seq[Track]
+  var scannedById = initTable[string, Track]()
   for filePath in walkDirRec(musicLibrary):
     if filePath.splitFile.ext.toLowerAscii() != ".mp3": continue
     let relativeName = relativePath(filePath, musicLibrary)
@@ -51,11 +60,13 @@ proc scanLibrary() =
     if separator >= 0: album = album[separator + 3 .. ^1]
     let track = Track(id: trackId(relativeName), artist: parsed.artist, title: parsed.title,
       album: album, filePath: filePath, size: getFileSize(filePath))
-    tracks.add(track)
-  tracks.sort(proc(a, b: Track): int =
+    scannedTracks.add(track)
+  scannedTracks.sort(proc(a, b: Track): int =
     result = cmp(a.artist.toLowerAscii(), b.artist.toLowerAscii())
     if result == 0: result = cmp(a.title.toLowerAscii(), b.title.toLowerAscii()))
-  for track in tracks: tracksById[track.id] = track
+  for track in scannedTracks: scannedById[track.id] = track
+  tracks = scannedTracks
+  tracksById = scannedById
 
 proc corsHeaders(contentType = "application/json; charset=utf-8"): HttpHeaders =
   result = newHttpHeaders()
@@ -211,11 +222,62 @@ proc publicTracks(): JsonNode =
   for track in tracks:
     result.add(publicTrack(track))
 
+proc refreshLibrary() =
+  let previousCount = tracks.len
+  scanLibrary()
+  trackCatalogueJson = $publicTracks()
+  inc libraryScanCount
+  lastLibraryScanAt = epochTime()
+  if tracks.len != previousCount:
+    echo &"[audio-server-nim] library refreshed: {previousCount} -> {tracks.len} tracks"
+
+proc libraryRefreshLoop() {.async.} =
+  while true:
+    await sleepAsync(LibraryRescanIntervalMs)
+    try:
+      refreshLibrary()
+    except CatchableError as error:
+      stderr.writeLine("[audio-server-nim] library refresh failed: " & error.msg)
+
+proc normalized(value: string): string = value.strip().toLowerAscii()
+
+proc albumKey(track: Track): string =
+  normalized(track.artist) & "\x1f" & normalized(track.album)
+
+proc trackWasRecent(id: string, window: int): bool =
+  let first = max(0, selectionHistory.len - window)
+  for index in first ..< selectionHistory.len:
+    if selectionHistory[index].id == id: return true
+
+proc artistWasRecent(artist: string, window: int): bool =
+  let wanted = normalized(artist)
+  let first = max(0, selectionHistory.len - window)
+  for index in first ..< selectionHistory.len:
+    if normalized(selectionHistory[index].artist) == wanted: return true
+
+proc albumWasRecent(track: Track, window: int): bool =
+  let wanted = albumKey(track)
+  let first = max(0, selectionHistory.len - window)
+  for index in first ..< selectionHistory.len:
+    if albumKey(selectionHistory[index]) == wanted: return true
+
+proc recordSelection(track: Track) =
+  selectionHistory.add(track)
+  if selectionHistory.len > TrackRepeatWindow:
+    selectionHistory.delete(0 .. selectionHistory.len - TrackRepeatWindow - 1)
+
 proc randomTrack(excludeId = ""): Track =
-  if tracks.len == 0: return nil
-  result = tracks[rand(tracks.high)]
-  while tracks.len > 1 and result.id == excludeId:
-    result = tracks[rand(tracks.high)]
+  var eligible: seq[Track]
+  for candidate in tracks:
+    if candidate.id == excludeId: continue
+    if trackWasRecent(candidate.id, TrackRepeatWindow): continue
+    if artistWasRecent(candidate.artist, ArtistRepeatWindow): continue
+    if albumWasRecent(candidate, AlbumRepeatWindow): continue
+    eligible.add(candidate)
+
+  if eligible.len == 0: return nil
+  result = eligible[rand(eligible.high)]
+  recordSelection(result)
 
 proc callback(request: Request) {.async.} =
   request.client.setSockOpt(OptNoDelay, true)
@@ -227,7 +289,11 @@ proc callback(request: Request) {.async.} =
       var headers = corsHeaders(); headers["Content-Length"] = "0"
       await request.respond(Http204, "", headers)
     elif path == "/api/health":
-      await sendJson(request,Http200,%*{"ok":true,"tracks":tracks.len,"library":musicLibrary,"backend":"nim","metrics":{
+      await sendJson(request,Http200,%*{"ok":true,"tracks":tracks.len,"library":musicLibrary,"backend":"nim","scheduler":{
+        "historySize":selectionHistory.len,"albumWindow":AlbumRepeatWindow,
+        "artistWindow":ArtistRepeatWindow,"trackWindow":TrackRepeatWindow},"libraryWatcher":{
+        "intervalSeconds":LibraryRescanIntervalMs div 1000,"scanCount":libraryScanCount,
+        "lastScanAt":lastLibraryScanAt},"metrics":{
         "requestId":metrics.requestId,"totalRequests":metrics.totalRequests,"packetsRx":metrics.packetsRx,
         "bytesRx":metrics.bytesRx,"openStreams":metrics.openStreams,"httpStatus":metrics.httpStatus,
         "uptimeSeconds":int(epochTime()-startedAt),"memRss":getOccupiedMem()}})
@@ -236,7 +302,9 @@ proc callback(request: Request) {.async.} =
       let excludeId = if path.len > 18: path[18 .. ^1] else: ""
       let selected = randomTrack(excludeId)
       if selected.isNil:
-        await sendJson(request, Http404, %*{"error": "Library is empty"})
+        await sendJson(request, Http503, %*{
+          "error":"No track satisfies the repeat limits",
+          "limits":{"album":AlbumRepeatWindow,"artist":ArtistRepeatWindow,"track":TrackRepeatWindow}})
       else:
         await sendJson(request, Http200, publicTrack(selected))
     elif path.startsWith("/api/stream/"):
@@ -272,13 +340,13 @@ proc callback(request: Request) {.async.} =
         discard
 
 createDir(cacheDirectory)
-scanLibrary()
 randomize()
-trackCatalogueJson = $publicTracks()
+refreshLibrary()
 echo &"[audio-server-nim] {tracks.len} tracks from {musicLibrary}"
 echo &"[audio-server-nim] listening on http://localhost:{port.int}"
 var server = newAsyncHttpServer()
 let serverCallback = proc(request: Request): Future[void] {.gcsafe.} =
   {.cast(gcsafe).}:
     result = callback(request)
+asyncCheck libraryRefreshLoop()
 waitFor server.serve(port, serverCallback, address="0.0.0.0")

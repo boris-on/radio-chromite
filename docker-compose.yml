@@ -1,4 +1,21 @@
 services:
+  caddy:
+    image: caddy:2-alpine
+    environment:
+      RADIO_DOMAIN: ${RADIO_DOMAIN:?Set RADIO_DOMAIN in .env}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      frontend:
+        condition: service_healthy
+    restart: unless-stopped
+
   backend:
     build:
       context: .
@@ -12,8 +29,8 @@ services:
         target: /music
         read_only: true
       - cover-cache:/app/.cover-cache
-    ports:
-      - "${BACKEND_PORT:-8789}:8789"
+    expose:
+      - "8789"
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8789/api/health"]
@@ -32,8 +49,8 @@ services:
     environment:
       HOSTNAME: 0.0.0.0
       PORT: "3000"
-    ports:
-      - "${WEB_PORT:-3000}:3000"
+    expose:
+      - "3000"
     depends_on:
       backend:
         condition: service_healthy
@@ -47,3 +64,5 @@ services:
 
 volumes:
   cover-cache:
+  caddy-data:
+  caddy-config:

@@ -4,12 +4,13 @@ Next.js frontend and Nim audio streaming backend.
 
 ## Linux server with Docker Compose
 
-The deployment contains two containers:
+The deployment contains three containers:
 
-- `frontend` — public Next.js interface on port `3000` by default;
-- `backend` — Nim audio server with FFmpeg on public port `8789` by default.
+- `caddy` — public HTTPS reverse proxy on ports `80` and `443`;
+- `frontend` — internal Next.js interface;
+- `backend` — internal Nim audio server with FFmpeg.
 
-The browser uses same-origin `/api` requests through the frontend proxy. Port `8789` is also published for direct API access from the local network.
+The browser uses same-origin `/api` requests through the frontend proxy. The frontend and backend ports are not exposed publicly.
 
 ### 1. Configure the music directory
 
@@ -22,8 +23,7 @@ Set an absolute Linux path:
 
 ```dotenv
 MUSIC_PATH=/srv/radio-chromite/music
-WEB_PORT=3000
-BACKEND_PORT=8789
+RADIO_DOMAIN=radio.example.com
 ```
 
 `MUSIC_PATH` must contain album directories with MP3 files. It is mounted inside the backend container as `/music` in read-only mode.
@@ -49,14 +49,14 @@ chmod -R a+rX /srv/radio-chromite/music
 docker compose up -d --build
 ```
 
-Open `http://SERVER_IP:3000`. If `WEB_PORT` is changed, use that port instead.
+Create an `A` DNS record (and `AAAA` when IPv6 is configured) for `RADIO_DOMAIN` pointing to the server. Allow inbound TCP ports `80` and `443`, plus UDP `443` for HTTP/3. Then open `https://RADIO_DOMAIN`. Caddy obtains and renews the certificate automatically; the first issuance can take a short time after DNS propagation.
 
 ### 3. Status and logs
 
 ```bash
 docker compose ps
-docker compose logs -f backend frontend
-curl http://127.0.0.1:3000/api/health
+docker compose logs -f caddy backend frontend
+curl https://RADIO_DOMAIN/api/health
 ```
 
 ### Updating and stopping
@@ -70,7 +70,10 @@ docker compose up -d --build
 docker compose down
 ```
 
-The extracted cover cache is kept in the named volume `cover-cache`. `docker compose down` preserves it; `docker compose down -v` removes it.
+The extracted cover cache and Caddy certificates are kept in named volumes. `docker compose down` preserves them; `docker compose down -v` removes them. Do not use `-v` unless certificate and cover-cache removal is intended.
+
+The Nim backend rescans the active music directory every 30 seconds. Newly added
+MP3 files become available automatically without restarting the container.
 
 ## Local development
 
