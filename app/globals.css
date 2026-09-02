@@ -202,6 +202,67 @@ button { color: inherit; }
 .transport-controls button:hover:not(:disabled) { border-color:rgba(145,213,243,.6); background:linear-gradient(180deg,rgba(45,91,116,.8),rgba(7,24,35,.9)); }
 .transport-controls button:disabled { opacity:.28; cursor:not-allowed; }.transport-controls button span{font-size:10px}.transport-controls button small{font-size:6px;letter-spacing:.18em}
 
+.moscow-panel {
+  position:absolute;
+  z-index:31;
+  top:870px;
+  left:5vw;
+  width:min(43vw,700px);
+  min-width:520px;
+  padding:8px 10px 7px;
+  border:1px solid rgba(92,142,161,.48);
+  background:
+    linear-gradient(135deg,rgba(100,151,169,.07),transparent 31%),
+    rgba(5,25,36,.74);
+  box-shadow:inset 0 0 0 1px rgba(3,15,23,.86),0 9px 30px rgba(0,0,0,.2);
+  color:#7899a7;
+  font-size:7px;
+  letter-spacing:.14em;
+  text-transform:uppercase;
+}
+.moscow-panel::before { content:""; position:absolute; inset:0; pointer-events:none; opacity:.32; background:linear-gradient(rgba(83,138,157,.07) 1px,transparent 1px),linear-gradient(90deg,rgba(83,138,157,.07) 1px,transparent 1px); background-size:16px 16px; }
+.moscow-panel-head,.moscow-panel-foot { position:relative; z-index:1; display:flex; align-items:center; justify-content:space-between; }
+.moscow-panel-head { min-height:28px; padding:0 9px; border:1px solid rgba(104,155,174,.4); background:linear-gradient(90deg,rgba(62,108,126,.35),rgba(12,43,57,.18)); color:#bbd0d8; font-size:10px; font-weight:700; letter-spacing:.17em; text-shadow:1px 2px 2px #02090e; }
+.moscow-panel-head b { color:#618493; font-size:7px; letter-spacing:.19em; }
+.moscow-panel-body { position:relative; z-index:1; display:grid; grid-template-columns:minmax(110px,.62fr) minmax(300px,2fr) minmax(110px,.62fr); min-height:215px; margin-top:7px; border:1px solid rgba(65,111,131,.34); background:rgba(3,18,27,.36); }
+.moscow-location-data,.moscow-weather-data { display:grid; grid-template-columns:auto 1fr; align-content:center; gap:11px 7px; padding:14px 8px; }
+.moscow-location-data span,.moscow-weather-data span { color:#557988; }
+.moscow-location-data b,.moscow-weather-data b { color:#a9c0c9; text-align:right; font-size:8px; font-weight:700; letter-spacing:.09em; white-space:nowrap; }
+.moscow-location-data b:last-child { color:#c7d9df; font-size:10px; }
+.moscow-weather-data { border-left:1px solid rgba(65,111,131,.28); }
+.moscow-weather-data i { grid-column:1/-1; display:block; height:1px; background:rgba(77,126,145,.3); }
+.moscow-locator { position:relative; min-width:0; min-height:215px; overflow:hidden; border-left:1px solid rgba(65,111,131,.25); background:radial-gradient(circle at 50% 52%,rgba(63,126,148,.13),transparent 53%),#04131c; }
+.moscow-map-module { position:absolute; inset:0; }
+.moscow-map-module { overflow:hidden; isolation:isolate; background:#04131c; font-family:"Arial Narrow","Roboto Condensed",Arial,sans-serif; }
+.moscow-map-module > .moscow-map-canvas { position:absolute; inset:0; z-index:1; width:100%; height:100%; cursor:crosshair; }
+.moscow-map-module .maplibregl-canvas { outline:none; }
+.moscow-map-module .maplibregl-ctrl-bottom-right { right:2px; bottom:1px; z-index:9; opacity:.55; }
+.moscow-map-module .maplibregl-ctrl-attrib { max-width:210px; padding:1px 3px !important; border-radius:0 !important; background:rgba(2,15,23,.82) !important; box-shadow:none !important; color:#638391 !important; font-size:5px !important; line-height:1.15 !important; }
+.moscow-map-module .maplibregl-ctrl-attrib a { color:#789aa7 !important; text-decoration:none; }
+.moscow-map-module .maplibregl-ctrl-attrib-button { width:15px; height:15px; opacity:.55; filter:grayscale(1) invert(.7); }
+.map-radar { position:absolute; z-index:4; left:0; top:0; width:0; height:0; pointer-events:none; color:#86aebb; }
+.radar-fixed-axis { position:absolute; left:0; top:0; width:25px; height:1px; background:linear-gradient(90deg,transparent,rgba(174,210,219,.66),transparent); transform:translate(-50%,-50%); }
+.radar-fixed-axis-v { transform:translate(-50%,-50%) rotate(90deg); }
+.radar-node { position:absolute; left:0; top:0; width:5px; height:5px; border:1px solid #b8d0d7; background:#789faa; transform:translate(-50%,-50%); box-shadow:0 0 0 2px rgba(87,145,161,.22); }
+.radar-node-label { position:absolute; z-index:6; left:11px; top:-9px; padding:2px 5px; border:1px solid rgba(119,177,195,.5); background:rgba(7,31,43,.86); color:#b1c9d1; font-size:6px; font-weight:700; letter-spacing:.12em; white-space:nowrap; box-shadow:2px 2px 0 rgba(0,0,0,.3); }
+.map-state-readout,.map-cursor-readout,.map-probe-readout { position:absolute; z-index:7; color:#6f919e; font-size:5px; line-height:1.35; letter-spacing:.07em; text-shadow:0 1px #01090e; pointer-events:none; }
+.map-state-readout { left:3px; top:3px; display:grid; grid-template-columns:auto auto; gap:1px 5px; padding:3px; background:rgba(2,17,25,.62); }
+.map-state-readout b { color:#a6bec7; text-align:right; font-weight:700; }
+.map-cursor-readout { left:3px; bottom:4px; display:flex; flex-direction:column; padding:3px; background:rgba(2,17,25,.66); }
+.map-cursor-readout strong { color:#a8c0c8; }
+.map-probe-readout { right:3px; top:3px; width:94px; padding:3px 4px; border:1px solid rgba(78,126,143,.28); background:rgba(2,17,25,.72); }
+.map-probe-readout > div,.map-probe-readout > span { display:flex; justify-content:space-between; gap:4px; }
+.map-probe-readout strong,.map-probe-readout.is-locked > div b { color:#b5cbd2; }.map-probe-readout b { color:#8ba8b3; font-weight:700; }
+.map-probe-readout button { position:relative; z-index:2; float:right; margin:2px -1px -1px 0; padding:0; border:0; background:transparent; color:#789aa7; font:inherit; letter-spacing:.08em; cursor:pointer; pointer-events:auto; }
+.map-probe-readout button:hover { color:#bfd4da; }
+.map-probe-marker { width:13px; height:13px; border:1px solid rgba(176,210,218,.78); background:linear-gradient(90deg,transparent 45%,#a8c4cc 46% 54%,transparent 55%),linear-gradient(transparent 45%,#a8c4cc 46% 54%,transparent 55%); box-shadow:0 0 0 3px rgba(72,130,148,.18); }
+.map-offline-fallback { position:absolute; z-index:8; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:5px; background:radial-gradient(circle,rgba(28,70,84,.18),transparent 56%),#04131c; color:#668894; font-size:7px; letter-spacing:.13em; }
+.map-offline-fallback b { color:#9db6bf; font-size:6px; }
+.map-source-online .map-offline-fallback { display:none; }
+.moscow-panel-foot { min-height:27px; padding:6px 10px 0; color:#466c7a; font-size:6px; border-top:1px solid rgba(73,121,140,.27); }
+.moscow-panel-foot span:last-child { text-align:right; }
+.moscow-panel-foot a { color:#5d8391; text-decoration:none; }.moscow-panel-foot a:hover { color:#9cb8c1; }
+
 .right-column { position:absolute; z-index:32; top:104px; right:68px; width:21vw; min-width:260px; max-width:330px; padding:0 12px 13px; border-left:1px solid rgba(117,217,215,.24); border-right:1px solid rgba(117,217,215,.13); background:linear-gradient(180deg, rgba(7,17,20,.78), rgba(4,9,11,.52)); clip-path:polygon(0 0, 89% 0, 100% 22px, 100% 100%, 9% 100%, 0 calc(100% - 18px)); box-shadow:18px 25px 60px rgba(0,0,0,.45); }
 .column-head { height:44px; display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid rgba(112,210,208,.25); color:#9cc4c4; font-size:7px; letter-spacing:.26em; }
 .column-head b { color:#385f61; font-weight:500; }
@@ -238,7 +299,7 @@ button { color: inherit; }
 .data-a span, .data-a b { display:block; }.data-a span{font-size:6px;letter-spacing:.18em;color:#3d6567}.data-a b{font-size:9px;letter-spacing:.18em;color:#8fb7b8;margin-top:5px;font-weight:500}.data-stream{font-family:monospace;font-size:7px;color:#365f61;white-space:nowrap;overflow:hidden}.data-b{text-align:right;font-size:7px;letter-spacing:.22em;color:#567f81}
 .footer-strip { position:relative; z-index:34; height:34px; display:grid; grid-template-columns:1fr 1fr 1fr; align-items:center; padding:0 62px 0 8vw; border-top:1px solid rgba(118,217,216,.16); background:#030708; font-size:6px; letter-spacing:.22em; color:#315052; }.footer-strip span:nth-child(2){text-align:center}.footer-strip span:last-child{text-align:right}
 
-/* Metalheart / 2Advanced-era panel skin */
+/* Chrome panel skin */
 .brand-title,
 .now-playing h1,
 .artist,
@@ -400,6 +461,9 @@ body { color:#9eb7c5; font-weight:500; }
   .right-column { width:28vw; min-width:245px; }
   .disc-assembly { width:580px; max-width:66vw; }
   .metal-b { right:-37vw; }
+  .moscow-panel { left:5vw; width:40vw; min-width:390px; top:900px; }
+  .moscow-panel-body { grid-template-columns:1fr 1.15fr; }
+  .moscow-locator { display:block; grid-column:1/-1; grid-row:2; min-height:190px; border-left:0; border-top:1px solid rgba(65,111,131,.25); }
 }
 
 @media (max-width: 820px) {
@@ -412,6 +476,9 @@ body { color:#9eb7c5; font-weight:500; }
   .cd-disc { width:min(86vw, 470px); }
   .now-playing { position:relative; width:min(90vw, 470px); margin:-20px auto 0; padding-left:16px; }
   .right-column { position:relative; top:auto; right:auto; width:calc(100% - 36px); max-width:none; min-width:0; margin:32px 18px 0; clip-path:polygon(0 0, 96% 0,100% 18px,100% 100%,4% 100%,0 calc(100% - 18px)); }
+  .moscow-panel { position:relative; top:auto; left:auto; width:calc(100% - 36px); min-width:0; margin:32px 18px 0; }
+  .moscow-panel-body { grid-template-columns:minmax(100px,.62fr) minmax(260px,2fr) minmax(100px,.62fr); }
+  .moscow-locator { display:block; }
   .recent-list { display:grid; grid-template-columns:1fr 1fr; gap:0 12px; }
   .metal-a { width:100vw;height:100vw;min-width:0;min-height:0;left:-50vw;top:-18vw;opacity:.57; }
   .metal-b { width:120vw;height:55vw;min-width:0;min-height:0;right:-72vw;top:29vh;opacity:.45; }
@@ -433,6 +500,11 @@ body { color:#9eb7c5; font-weight:500; }
   .artist { font-size:24px; }
   .recent-list { grid-template-columns:1fr; }
   .right-column { margin-top:44px; }
+  .moscow-panel-body { grid-template-columns:1fr 1fr; }
+  .moscow-locator { display:block; grid-column:1/-1; grid-row:2; min-height:190px; }
+  .moscow-location-data,.moscow-weather-data { padding:13px 9px; gap:10px 7px; }
+  .moscow-panel-head { font-size:8px; }
+  .moscow-panel-foot { gap:12px; }
   .arc-a,.arc-b{font-size:5px;letter-spacing:.15em}.cd-serial{font-size:5px}
 }
 

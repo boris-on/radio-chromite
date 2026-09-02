@@ -1,0 +1,22 @@
+FROM nim:2.2.10 AS build
+
+WORKDIR /source
+COPY backend-nim/src/radio_chromite_backend.nim ./radio_chromite_backend.nim
+RUN nim c -d:release --opt:speed -o:/radio_chromite_backend radio_chromite_backend.nim
+
+FROM debian:bookworm-slim AS runtime
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates ffmpeg wget \
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd --system radio \
+    && useradd --uid 10001 --gid radio --home-dir /app --shell /usr/sbin/nologin radio \
+    && mkdir -p /app/.cover-cache \
+    && chown -R radio:radio /app
+
+WORKDIR /app
+COPY --from=build /radio_chromite_backend ./radio_chromite_backend
+
+USER radio
+EXPOSE 8789
+ENTRYPOINT ["./radio_chromite_backend"]

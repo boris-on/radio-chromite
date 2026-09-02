@@ -1,0 +1,15 @@
+.git
+.next
+.next-*
+node_modules
+backend
+backend-lua
+backend-nim/bin
+backend-nim/.cover-cache
+backend-nim/src/*.exe
+benchmarks
+*.log
+*.tsbuildinfo
+.env
+.env.local
+.env.*.local

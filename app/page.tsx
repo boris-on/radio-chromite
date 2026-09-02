@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import MoscowRadarMap from "../components/MoscowRadarMap";
 
-const AUDIO_API = process.env.NEXT_PUBLIC_AUDIO_API_URL || "http://localhost:8787";
+const AUDIO_API = process.env.NEXT_PUBLIC_AUDIO_API_URL ?? "http://localhost:8789";
 
 type Track = {
   id: string;
@@ -27,6 +28,13 @@ type ServerMetrics = {
   openStreams: number; httpStatus: number; uptimeSeconds: number; memRss: number;
 };
 
+type MoscowWeather = {
+  temperature: number; humidity: number; pressure: number;
+  windSpeed: number; windDirection: number;
+  sunrise: string; sunset: string; daylightDuration: number;
+  observedAt: string; source: string;
+};
+
 const apiUrl = (path: string) => `${AUDIO_API}${path}`;
 const audioEndpoint = AUDIO_API.replace(/^https?:\/\//, "").toUpperCase();
 const audioProtocol = AUDIO_API.startsWith("https://") ? "HTTPS" : "HTTP";
@@ -34,6 +42,8 @@ const pad = (value: number, length = 2) => Math.max(0, Math.round(value)).toStri
 const hex = (value: number) => `0x${Math.max(0, Math.round(value)).toString(16).toUpperCase().padStart(8, "0")}`;
 const formatTime = (seconds: number) => `${pad(Math.floor(seconds / 60))}:${pad(Math.floor(seconds % 60))}`;
 const formatUptime = (seconds: number) => `${pad(Math.floor(seconds / 3600))}:${pad(Math.floor(seconds % 3600 / 60))}:${pad(seconds % 60)}`;
+const windCardinal = (degrees: number) => ["N", "NE", "E", "SE", "S", "SW", "W", "NW"][Math.round(degrees / 45) % 8];
+const apiClock = (value?: string) => value?.slice(11, 16) || "--:--";
 
 function TelemetryRow({ label, value, active = false }: { label: string; value: string; active?: boolean }) {
   return (
@@ -65,8 +75,11 @@ export default function Home() {
   const [hasStarted, setHasStarted] = useState(false);
   const [buffering, setBuffering] = useState(false);
   const [playbackError, setPlaybackError] = useState(false);
-  const [volume, setVolume] = useState(0.25);
+  const [volume, setVolume] = useState(0.1);
   const [clock, setClock] = useState("00:00:00");
+  const [moscowTime, setMoscowTime] = useState("00:00:00");
+  const [moscowWeather, setMoscowWeather] = useState<MoscowWeather | null>(null);
+  const [moscowWeatherOnline, setMoscowWeatherOnline] = useState(false);
   const [library, setLibrary] = useState<Track[]>([]);
   const [currentTrack, setCurrentTrack] = useState<Track | null>(null);
   const [history, setHistory] = useState<Track[]>([]);
@@ -85,10 +98,33 @@ export default function Home() {
   const [bufferAhead, setBufferAhead] = useState(0);
 
   useEffect(() => {
-    const tick = () => setClock(new Date().toLocaleTimeString("en-GB", { hour12: false }));
+    const tick = () => {
+      const now = new Date();
+      setClock(now.toLocaleTimeString("en-GB", { hour12: false }));
+      setMoscowTime(now.toLocaleTimeString("en-GB", { hour12: false, timeZone: "Europe/Moscow" }));
+    };
     tick();
     const id = window.setInterval(tick, 1000);
     return () => window.clearInterval(id);
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    const loadMoscowWeather = async () => {
+      try {
+        const response = await fetch("/api/moscow", { cache: "no-store" });
+        if (!response.ok) throw new Error("Moscow data unavailable");
+        const weather = await response.json() as MoscowWeather;
+        if (!active) return;
+        setMoscowWeather(weather);
+        setMoscowWeatherOnline(true);
+      } catch {
+        if (active) setMoscowWeatherOnline(false);
+      }
+    };
+    void loadMoscowWeather();
+    const interval = window.setInterval(loadMoscowWeather, 60_000);
+    return () => { active = false; window.clearInterval(interval); };
   }, []);
 
   useEffect(() => {
@@ -127,17 +163,23 @@ export default function Home() {
     if (!currentTrack) return;
     const controller = new AbortController();
     setTechnical(null);
-    fetch(apiUrl(`/api/metadata/${currentTrack.id}`), { signal: controller.signal })
-      .then((response) => {
-        if (!response.ok) throw new Error("Metadata unavailable");
-        return response.json() as Promise<TechnicalMetadata>;
-      })
-      .then((metadata) => {
-        setTechnical(metadata);
-        if (!duration && metadata.playTime) setDuration(metadata.playTime);
-      })
-      .catch(() => {});
-    return () => controller.abort();
+    const timer = window.setTimeout(() => {
+      fetch(apiUrl(`/api/metadata/${currentTrack.id}`), { signal: controller.signal })
+        .then((response) => {
+          if (!response.ok) throw new Error("Metadata unavailable");
+          return response.json() as Promise<TechnicalMetadata>;
+        })
+        .then((metadata) => {
+          if (currentTrackRef.current?.id !== currentTrack.id) return;
+          setTechnical(metadata);
+          if (!duration && metadata.playTime) setDuration(metadata.playTime);
+        })
+        .catch(() => {});
+    }, 2200);
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
   }, [currentTrack]);
 
   useEffect(() => {
@@ -156,12 +198,31 @@ export default function Home() {
         const initialTrack = tracks[Math.floor(Math.random() * tracks.length)] || null;
         const upcomingCandidates = initialTrack ? tracks.filter((track) => track.id !== initialTrack.id) : tracks;
         upcomingTrackRef.current = upcomingCandidates[Math.floor(Math.random() * upcomingCandidates.length)] || null;
+        if (upcomingTrackRef.current) {
+          const cover = new window.Image();
+          cover.src = apiUrl(upcomingTrackRef.current.coverUrl);
+        }
         currentTrackRef.current = initialTrack;
         setCurrentTrack(initialTrack);
         setPlayedTracks(initialTrack ? [initialTrack] : []);
         if (initialTrack && audioRef.current) {
-          audioRef.current.src = apiUrl(initialTrack.streamUrl);
-          audioRef.current.load();
+          const audio = audioRef.current;
+          audio.src = apiUrl(initialTrack.streamUrl);
+          audio.volume = volume;
+          audio.autoplay = true;
+          audio.load();
+          setBuffering(true);
+          void audio.play()
+            .then(() => {
+              setIsPlaying(true);
+              setHasStarted(true);
+              setPlaybackError(false);
+            })
+            .catch(() => {
+              setIsPlaying(false);
+              setPlaybackError(true);
+            })
+            .finally(() => setBuffering(false));
         }
         setLibraryError(tracks.length === 0);
       })
@@ -180,6 +241,10 @@ export default function Home() {
   const setUpcomingTrack = (excludeId?: string) => {
     const upcoming = randomTrack(excludeId);
     upcomingTrackRef.current = upcoming;
+    if (upcoming) {
+      const cover = new window.Image();
+      cover.src = apiUrl(upcoming.coverUrl);
+    }
     return upcoming;
   };
 
@@ -234,8 +299,8 @@ export default function Home() {
     const next = upcomingTrackRef.current || randomTrack(currentTrackRef.current?.id);
     if (next) {
       setForwardHistory([]);
-      setUpcomingTrack(next.id);
       await switchTrack(next, forcePlay);
+      setUpcomingTrack(next.id);
     }
   };
 
@@ -281,7 +346,8 @@ export default function Home() {
     <main className={`site-shell ${isPlaying ? "is-playing" : ""}`}>
       <audio
         ref={audioRef}
-        preload="none"
+        autoPlay
+        preload="auto"
         onPlaying={() => setIsPlaying(true)}
         onPause={() => setIsPlaying(false)}
         onWaiting={() => setBuffering(true)}
@@ -345,10 +411,10 @@ export default function Home() {
 
       <header className="topline">
         <div className="brand-block">
-          <div className="brand-mark"><span>N</span><span>W</span></div>
+          <div className="brand-mark"><span>R</span><span>C</span></div>
           <div>
-            <div className="brand-title">NULLWAVE // RADIO</div>
-            <div className="brand-sub">EXPERIMENTAL TRANSMISSION NODE_001</div>
+            <div className="brand-title">RADIO CHROMITE</div>
+            <div className="brand-sub">DIGITAL TRANSMISSION NODE_001</div>
           </div>
         </div>
         <div className="top-status">
@@ -377,7 +443,7 @@ export default function Home() {
             <span className="cd-track-ring ring-1" />
             <span className="cd-track-ring ring-2" />
             <span className="cd-track-ring ring-3" />
-            <span className="cd-arc arc-a">RADIO_TRANSMISSION // NODE_001 // 44.100</span>
+            <span className="cd-arc arc-a">RADIO_CHROMITE // NODE_001 // 44.100</span>
             <span className="cd-arc arc-b">STREAM.PROTOCOL / DIGITAL AUDIO / 320KBPS</span>
             <span className="cd-serial">NW-RX02 / 00193-A</span>
             <span className="cd-hole">
@@ -466,6 +532,42 @@ export default function Home() {
         </aside>
       </section>
 
+      <section className="moscow-panel" aria-label="Current Moscow weather and time">
+        <div className="moscow-panel-head">
+          <span>TRANSMISSION_ORIGIN // MOSCOW</span>
+          <b>NODE_055</b>
+        </div>
+        <div className="moscow-panel-body">
+          <div className="moscow-location-data">
+            <span>LOCATION</span><b>MOSCOW / RU</b>
+            <span>LATITUDE</span><b>55.7558 N</b>
+            <span>LONGITUDE</span><b>37.6176 E</b>
+            <span>TIMEZONE</span><b>UTC+03</b>
+            <span>LOCAL TIME</span><b>{moscowTime}</b>
+          </div>
+
+          <div className="moscow-locator" aria-label="Interactive map of Moscow">
+            <MoscowRadarMap />
+          </div>
+
+          <div className="moscow-weather-data">
+            <span>TEMP</span><b>{moscowWeather ? `${moscowWeather.temperature.toFixed(1)} °C` : "--- °C"}</b>
+            <span>HUMIDITY</span><b>{moscowWeather ? `${Math.round(moscowWeather.humidity)} %` : "--- %"}</b>
+            <span>PRESSURE</span><b>{moscowWeather ? `${Math.round(moscowWeather.pressure)} hPa` : "---- hPa"}</b>
+            <span>WIND</span><b>{moscowWeather ? `${windCardinal(moscowWeather.windDirection)} ${moscowWeather.windSpeed.toFixed(1)} m/s` : "-- -.- m/s"}</b>
+            <i />
+            <span>SUNRISE</span><b>{apiClock(moscowWeather?.sunrise)}</b>
+            <span>SUNSET</span><b>{apiClock(moscowWeather?.sunset)}</b>
+            <span>DAY LENGTH</span><b>{moscowWeather ? formatUptime(moscowWeather.daylightDuration) : "--:--:--"}</b>
+          </div>
+        </div>
+        <div className="moscow-panel-foot">
+          <span>SOURCE: {moscowWeather?.source || "OPEN-METEO"} // {moscowWeatherOnline ? "DATA LINK ACTIVE" : "DATA LINK OFFLINE"}</span>
+          <a href="https://www.rainviewer.com/" target="_blank" rel="noreferrer">WEATHER RADAR: RAINVIEWER</a>
+          <span>UPDATE INTERVAL: 60 SEC</span>
+        </div>
+      </section>
+
       <aside className="right-column" id="archive">
         <div className="column-head">
           <span>RECENT_TRANSMISSIONS</span><b>LOG / 05</b>
@@ -517,7 +619,7 @@ export default function Home() {
       <section className="bottom-data" id="about">
         <div className="data-a">
           <span>TRANSMISSION ENVIRONMENT</span>
-          <b>METALHEART // 2002 EMULATION</b>
+          <b>RADIO CHROMITE // BROADCAST SYSTEM</b>
         </div>
         <div className="data-stream">
           01100101 10011100 00101001 // packet:48F1 // sync:001 // checksum:7AA4 // node-sequence 03.14.15
@@ -526,9 +628,9 @@ export default function Home() {
       </section>
 
       <footer id="contact" className="footer-strip">
-        <span>NULLWAVE RADIO // TRANSMISSION INTERFACE</span>
-        <span>VISUAL ASSETS: PIXABAY CONTENT LICENSE</span>
-        <span>CONTACT // STUDIO@NULLWAVE.LOCAL</span>
+        <span>RADIO CHROMITE // DIGITAL BROADCAST</span>
+        <span></span>
+        <span>CONTACT // STUDIO@RADIOCHROMITE.LOCAL</span>
       </footer>
     </main>
   );

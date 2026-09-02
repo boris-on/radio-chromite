@@ -55,6 +55,7 @@ let completed = 0;
 let skipped = 0;
 let failed = 0;
 rmSync(completionMarker, { force: true });
+
 for (const input of files) {
   const output = join(outputRoot, relative(sourceRoot, input));
   if (existsSync(output) && !force) {
@@ -106,7 +107,8 @@ if (failed > 0) {
   console.error(`[normalize] incomplete: ${completed} written, ${skipped} skipped, ${failed} failed`);
   process.exitCode = 1;
 } else {
+  mkdirSync(outputRoot, { recursive: true });
   writeFileSync(completionMarker, new Date().toISOString());
   console.log(`[normalize] finished: ${completed} written, ${skipped} skipped`);
-  console.log("Restart npm run dev to use the normalized library.");
+  console.log("Restart the audio backend to use the normalized library.");
 }

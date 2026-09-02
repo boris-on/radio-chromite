@@ -1,0 +1,49 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    environment:
+      AUDIO_SERVER_PORT: "8789"
+      MUSIC_LIBRARY_PATH: /music
+    volumes:
+      - type: bind
+        source: ${MUSIC_PATH:?Set MUSIC_PATH in .env}
+        target: /music
+        read_only: true
+      - cover-cache:/app/.cover-cache
+    expose:
+      - "8789"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8789/api/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 20s
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+      args:
+        NEXT_PUBLIC_AUDIO_API_URL: ""
+        BACKEND_INTERNAL_URL: http://backend:8789
+    environment:
+      HOSTNAME: 0.0.0.0
+      PORT: "3000"
+    ports:
+      - "${WEB_PORT:-3000}:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 15s
+
+volumes:
+  cover-cache:

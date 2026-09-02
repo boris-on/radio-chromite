@@ -1,5 +1,5 @@
 {
-  "name": "metalheart-radio",
+  "name": "radio-chromite",
   "version": "1.0.0",
   "private": true,
   "scripts": {
@@ -12,6 +12,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "maplibre-gl": "^5.16.0",
     "next": "15.2.4",
     "react": "19.0.0",
     "react-dom": "19.0.0"
