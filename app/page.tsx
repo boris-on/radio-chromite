@@ -633,7 +633,7 @@ export default function Home() {
       <footer id="contact" className="footer-strip">
         <span>RADIO CHROMITE // DIGITAL BROADCAST</span>
         <span></span>
-        <span>CONTACT // STUDIO@RADIOCHROMITE.LOCAL</span>
+        <span>CONTACT // GITHUB.COM/BORIS-ON</span>
       </footer>
     </main>
   );
