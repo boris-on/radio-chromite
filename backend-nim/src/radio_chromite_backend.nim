@@ -30,7 +30,7 @@ let
   port = Port(parseInt(getEnv("AUDIO_SERVER_PORT", "8789")))
   sourceLibrary = absolutePath(getEnv("MUSIC_LIBRARY_PATH", projectRoot / "music"), projectRoot)
   normalizedLibrary = absolutePath(getEnv("NORMALIZED_LIBRARY_PATH", sourceLibrary & "-normalized"), projectRoot)
-  musicLibrary = if fileExists(normalizedLibrary / ".normalization-complete"): normalizedLibrary else: sourceLibrary
+  musicLibrary = normalizedLibrary
   priorityFile = sourceLibrary / "priorities.txt"
   cacheDirectory = getCurrentDir() / ".cover-cache"
   startedAt = epochTime()
