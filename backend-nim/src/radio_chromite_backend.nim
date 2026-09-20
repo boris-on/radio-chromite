@@ -380,7 +380,6 @@ proc selectNextTrack(excludeId = ""): Track =
           return
 
 proc callback(request: Request) {.async.} =
-  request.client.setSockOpt(OptNoDelay, true)
   inc metrics.totalRequests
   metrics.requestId = &"RX-{metrics.totalRequests:06X}"
   let path = request.url.path
