@@ -437,6 +437,7 @@ body { color:#9eb7c5; font-weight:500; }
 .system-grid b { color:#afc5ce; }
 .system-grid .connection-online { color:#bff4e9; }
 .barcode { border-top:1px solid rgba(86,133,152,.4); }
+.signal-spectrum { display:block; width:100%; height:118px; margin:15px 0 10px; background:transparent; }
 
 .bottom-data { border:1px solid rgba(95,142,161,.48); background:linear-gradient(90deg,rgba(26,67,83,.64),rgba(7,29,41,.58)); box-shadow:inset 0 0 0 1px rgba(4,18,26,.68); }
 .footer-strip { border-top:1px solid rgba(90,137,155,.4); background:#061722; color:#567c8b; }
@@ -552,6 +553,7 @@ body { color:#9eb7c5; font-weight:500; }
   .cd-disc { width:min(86vw, 470px); }
   .now-playing { position:relative; width:min(90vw, 470px); margin:-20px auto 0; padding-left:16px; }
   .right-column { position:relative; top:auto; right:auto; width:calc(100% - 36px); max-width:none; min-width:0; margin:32px 18px 0; clip-path:polygon(0 0, 96% 0,100% 18px,100% 100%,4% 100%,0 calc(100% - 18px)); }
+  .signal-spectrum { height:104px; }
   .moscow-panel { position:relative; top:auto; left:auto; width:calc(100% - 36px); min-width:0; margin:32px 18px 0; }
   .moscow-panel-body { grid-template-columns:minmax(100px,.62fr) minmax(260px,2fr) minmax(100px,.62fr); }
   .moscow-locator { display:block; }

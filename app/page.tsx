@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import MoscowRadarMap from "../components/MoscowRadarMap";
+import SignalSpectrum from "../components/SignalSpectrum";
 
 const AUDIO_API = (process.env.NEXT_PUBLIC_AUDIO_API_URL ?? "").replace(/\/$/, "");
 
@@ -345,6 +346,7 @@ export default function Home() {
     <main className={`site-shell ${isPlaying ? "is-playing" : ""}`}>
       <audio
         ref={audioRef}
+        crossOrigin="anonymous"
         autoPlay
         preload="auto"
         onPlaying={() => setIsPlaying(true)}
@@ -610,6 +612,8 @@ export default function Home() {
             <span>REQUEST_ID</span><b>{serverMetrics?.requestId || "RX-000000"}</b>
           </div>
         </div>
+
+        <SignalSpectrum audioRef={audioRef} />
 
         <div className="barcode" aria-hidden="true"><i/><i/><i/><i/><i/><i/><i/><i/><i/><i/><i/><i/><i/><i/><i/></div>
         <div className="column-foot">RX/02 // ARCHIVE INDEX // READ ONLY</div>
