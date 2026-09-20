@@ -1,9 +1,10 @@
-import std/[algorithm, asynchttpserver, asyncdispatch, asyncnet, httpcore, json, nativesockets, os, osproc, random, sequtils, sha1, strformat, strutils, tables, times]
+import std/[algorithm, asynchttpserver, asyncdispatch, asyncnet, httpcore, json, math, nativesockets, os, osproc, random, sequtils, sha1, strformat, strutils, tables, times]
 
 type
   Track = ref object
-    id, artist, title, album, filePath: string
+    id, artist, album, title, relativePath, filePath: string
     size: int64
+    weight: float64
 
   ServerMetrics = object
     totalRequests, packetsRx, bytesRx, openStreams: int64
@@ -13,10 +14,16 @@ type
 const
   ChunkSize = 64 * 1024
   MetadataCacheLimit = 5
-  AlbumRepeatWindow = 20
-  ArtistRepeatWindow = 20
+  ArtistRepeatWindow = 5
+  AlbumRepeatWindow = 12
   TrackRepeatWindow = 50
   LibraryRescanIntervalMs = 30_000
+  FallbackRuleSets = [
+    (artistWindow: 5, albumWindow: 12, trackWindow: 50),
+    (artistWindow: 3, albumWindow: 8, trackWindow: 40),
+    (artistWindow: 1, albumWindow: 4, trackWindow: 20),
+    (artistWindow: 0, albumWindow: 0, trackWindow: 0)
+  ]
 
 let
   projectRoot = getAppDir().parentDir
@@ -24,6 +31,7 @@ let
   sourceLibrary = absolutePath(getEnv("MUSIC_LIBRARY_PATH", projectRoot / "music"), projectRoot)
   normalizedLibrary = absolutePath(getEnv("NORMALIZED_LIBRARY_PATH", sourceLibrary & "-normalized"), projectRoot)
   musicLibrary = if fileExists(normalizedLibrary / ".normalization-complete"): normalizedLibrary else: sourceLibrary
+  priorityFile = sourceLibrary / "priorities.txt"
   cacheDirectory = getCurrentDir() / ".cover-cache"
   startedAt = epochTime()
 
@@ -34,31 +42,68 @@ var
   metrics = ServerMetrics(httpStatus: 200, requestId: "RX-000000")
   trackCatalogueJson = "[]"
   selectionHistory: seq[Track]
+  priorityEntryCount: int
   libraryScanCount: int64
   lastLibraryScanAt: float
 
-proc splitTrackName(fileName: string): tuple[artist, title: string] =
-  let base = splitFile(fileName).name
-  let marker = base.find(" - ")
-  if marker < 0: ("UNKNOWN ARTIST", base)
-  else: (base[0 ..< marker].strip(), base[marker + 3 .. ^1].strip())
+proc normalizePath(path: string): string =
+  result = path.replace('\\', '/').strip()
+  while result.startsWith("./"): result = result[2 .. ^1]
+  result = result.toLowerAscii()
+
+proc parseAlbumFolder(folderName: string): tuple[artist, album: string] =
+  let marker = folderName.find(" - ")
+  if marker < 0:
+    ("UNKNOWN ARTIST", folderName.strip())
+  else:
+    (folderName[0 ..< marker].strip(), folderName[marker + 3 .. ^1].strip())
+
+proc parseTrackTitle(fileName, artist: string): string =
+  result = splitFile(fileName).name.strip()
+  let prefix = artist & " - "
+  if result.toLowerAscii().startsWith(prefix.toLowerAscii()):
+    result = result[prefix.len .. ^1].strip()
+
+proc loadPriorities(filePath = priorityFile): Table[string, float64] =
+  result = initTable[string, float64]()
+  if not fileExists(filePath): return
+
+  var lineNumber = 0
+  for rawLine in lines(filePath):
+    inc lineNumber
+    let line = rawLine.strip()
+    if line.len == 0 or line.startsWith("#"): continue
+    let separator = line.rfind('|')
+    if separator < 1 or separator == line.high:
+      stderr.writeLine(&"[audio-server-nim] invalid priority line {lineNumber}: {line}")
+      continue
+    let relativeName = normalizePath(line[0 ..< separator])
+    try:
+      let weight = parseFloat(line[separator + 1 .. ^1].strip())
+      if weight < 0 or weight.classify in {fcNan, fcInf, fcNegInf}:
+        stderr.writeLine(&"[audio-server-nim] invalid priority line {lineNumber}: {line}")
+      else:
+        result[relativeName] = weight
+    except ValueError:
+      stderr.writeLine(&"[audio-server-nim] invalid priority line {lineNumber}: {line}")
+  echo &"[audio-server-nim] priorities loaded: {result.len} overrides"
 
 proc trackId(relativePath: string): string =
   ($secureHash(relativePath.toLowerAscii()))[0 .. 15].toLowerAscii()
 
-proc scanLibrary() =
+proc scanLibrary(priorities: Table[string, float64]) =
   if not dirExists(musicLibrary): raise newException(IOError, "Music library not found: " & musicLibrary)
   var scannedTracks: seq[Track]
   var scannedById = initTable[string, Track]()
   for filePath in walkDirRec(musicLibrary):
     if filePath.splitFile.ext.toLowerAscii() != ".mp3": continue
     let relativeName = relativePath(filePath, musicLibrary)
-    let parsed = splitTrackName(filePath.extractFilename())
-    var album = relativeName.parentDir.lastPathPart()
-    let separator = album.find(" - ")
-    if separator >= 0: album = album[separator + 3 .. ^1]
-    let track = Track(id: trackId(relativeName), artist: parsed.artist, title: parsed.title,
-      album: album, filePath: filePath, size: getFileSize(filePath))
+    let parsed = parseAlbumFolder(relativeName.parentDir.lastPathPart())
+    let title = parseTrackTitle(filePath.extractFilename(), parsed.artist)
+    let weight = priorities.getOrDefault(normalizePath(relativeName), 1.0)
+    let track = Track(id: trackId(relativeName), artist: parsed.artist, album: parsed.album,
+      title: title, relativePath: relativeName, filePath: filePath,
+      size: getFileSize(filePath), weight: weight)
     scannedTracks.add(track)
   scannedTracks.sort(proc(a, b: Track): int =
     result = cmp(a.artist.toLowerAscii(), b.artist.toLowerAscii())
@@ -223,7 +268,9 @@ proc publicTracks(): JsonNode =
 
 proc refreshLibrary() =
   let previousCount = tracks.len
-  scanLibrary()
+  let priorities = loadPriorities()
+  priorityEntryCount = priorities.len
+  scanLibrary(priorities)
   trackCatalogueJson = $publicTracks()
   inc libraryScanCount
   lastLibraryScanAt = epochTime()
@@ -240,8 +287,11 @@ proc libraryRefreshLoop() {.async.} =
 
 proc normalized(value: string): string = value.strip().toLowerAscii()
 
+proc albumKey(artist, album: string): string =
+  normalized(artist) & "\x1f" & normalized(album)
+
 proc albumKey(track: Track): string =
-  normalized(track.artist) & "\x1f" & normalized(track.album)
+  albumKey(track.artist, track.album)
 
 proc trackWasRecent(id: string, window: int): bool =
   let first = max(0, selectionHistory.len - window)
@@ -254,29 +304,80 @@ proc artistWasRecent(artist: string, window: int): bool =
   for index in first ..< selectionHistory.len:
     if normalized(selectionHistory[index].artist) == wanted: return true
 
-proc albumWasRecent(track: Track, window: int): bool =
-  let wanted = albumKey(track)
+proc albumWasRecent(artist, album: string, window: int): bool =
+  let wanted = albumKey(artist, album)
   let first = max(0, selectionHistory.len - window)
   for index in first ..< selectionHistory.len:
     if albumKey(selectionHistory[index]) == wanted: return true
 
+proc uniqueArtists(): seq[string] =
+  var seen = initTable[string, bool]()
+  for track in tracks:
+    if track.weight <= 0: continue
+    let key = normalized(track.artist)
+    if not seen.hasKey(key):
+      seen[key] = true
+      result.add(track.artist)
+
+proc uniqueAlbums(artist: string): seq[string] =
+  let wantedArtist = normalized(artist)
+  var seen = initTable[string, bool]()
+  for track in tracks:
+    if track.weight <= 0 or normalized(track.artist) != wantedArtist: continue
+    let key = albumKey(track)
+    if not seen.hasKey(key):
+      seen[key] = true
+      result.add(track.album)
+
+proc eligibleArtists(window: int): seq[string] =
+  for artist in uniqueArtists():
+    if not artistWasRecent(artist, window): result.add(artist)
+
+proc eligibleAlbums(artist: string, window: int): seq[string] =
+  for album in uniqueAlbums(artist):
+    if not albumWasRecent(artist, album, window): result.add(album)
+
+proc eligibleTracks(artist, album: string, window: int, excludeId: string): seq[Track] =
+  let wantedArtist = normalized(artist)
+  let wantedAlbum = albumKey(artist, album)
+  for track in tracks:
+    if track.weight <= 0 or track.id == excludeId: continue
+    if normalized(track.artist) != wantedArtist or albumKey(track) != wantedAlbum: continue
+    if not trackWasRecent(track.id, window): result.add(track)
+
+proc weightedRandomTrack(candidates: seq[Track]): Track =
+  var total = 0.0
+  for track in candidates: total += track.weight
+  if total <= 0: return nil
+  let target = rand(total)
+  var cumulative = 0.0
+  for track in candidates:
+    cumulative += track.weight
+    if target < cumulative: return track
+  candidates[^1]
+
 proc recordSelection(track: Track) =
   selectionHistory.add(track)
-  if selectionHistory.len > TrackRepeatWindow:
-    selectionHistory.delete(0 .. selectionHistory.len - TrackRepeatWindow - 1)
+  let historyLimit = max(ArtistRepeatWindow, max(AlbumRepeatWindow, TrackRepeatWindow))
+  if selectionHistory.len > historyLimit:
+    selectionHistory.delete(0 .. selectionHistory.len - historyLimit - 1)
 
-proc randomTrack(excludeId = ""): Track =
-  var eligible: seq[Track]
-  for candidate in tracks:
-    if candidate.id == excludeId: continue
-    if trackWasRecent(candidate.id, TrackRepeatWindow): continue
-    if artistWasRecent(candidate.artist, ArtistRepeatWindow): continue
-    if albumWasRecent(candidate, AlbumRepeatWindow): continue
-    eligible.add(candidate)
-
-  if eligible.len == 0: return nil
-  result = eligible[rand(eligible.high)]
-  recordSelection(result)
+proc selectNextTrack(excludeId = ""): Track =
+  for fallbackLevel, rules in FallbackRuleSets:
+    var artists = eligibleArtists(rules.artistWindow)
+    artists.shuffle()
+    for artist in artists:
+      var albums = eligibleAlbums(artist, rules.albumWindow)
+      albums.shuffle()
+      for album in albums:
+        let candidates = eligibleTracks(artist, album, rules.trackWindow, excludeId)
+        if candidates.len == 0: continue
+        result = weightedRandomTrack(candidates)
+        if not result.isNil:
+          if fallbackLevel > 0:
+            echo &"[audio-server-nim] scheduler fallback level={fallbackLevel}"
+          recordSelection(result)
+          return
 
 proc callback(request: Request) {.async.} =
   request.client.setSockOpt(OptNoDelay, true)
@@ -289,8 +390,9 @@ proc callback(request: Request) {.async.} =
       await request.respond(Http204, "", headers)
     elif path == "/api/health":
       await sendJson(request,Http200,%*{"ok":true,"tracks":tracks.len,"library":musicLibrary,"backend":"nim","scheduler":{
-        "historySize":selectionHistory.len,"albumWindow":AlbumRepeatWindow,
-        "artistWindow":ArtistRepeatWindow,"trackWindow":TrackRepeatWindow},"libraryWatcher":{
+        "historySize":selectionHistory.len,"artistWindow":ArtistRepeatWindow,
+        "albumWindow":AlbumRepeatWindow,"trackWindow":TrackRepeatWindow,
+        "priorityFile":"priorities.txt","priorityEntries":priorityEntryCount},"libraryWatcher":{
         "intervalSeconds":LibraryRescanIntervalMs div 1000,"scanCount":libraryScanCount,
         "lastScanAt":lastLibraryScanAt},"metrics":{
         "requestId":metrics.requestId,"totalRequests":metrics.totalRequests,"packetsRx":metrics.packetsRx,
@@ -299,10 +401,10 @@ proc callback(request: Request) {.async.} =
     elif path == "/api/tracks": await sendJsonText(request, Http200, trackCatalogueJson)
     elif path == "/api/random-track" or path.startsWith("/api/random-track/"):
       let excludeId = if path.len > 18: path[18 .. ^1] else: ""
-      let selected = randomTrack(excludeId)
+      let selected = selectNextTrack(excludeId)
       if selected.isNil:
         await sendJson(request, Http503, %*{
-          "error":"No track satisfies the repeat limits",
+          "error":"No other playable track is available",
           "limits":{"album":AlbumRepeatWindow,"artist":ArtistRepeatWindow,"track":TrackRepeatWindow}})
       else:
         await sendJson(request, Http200, publicTrack(selected))
@@ -338,14 +440,15 @@ proc callback(request: Request) {.async.} =
       except CatchableError:
         discard
 
-createDir(cacheDirectory)
-randomize()
-refreshLibrary()
-echo &"[audio-server-nim] {tracks.len} tracks from {musicLibrary}"
-echo &"[audio-server-nim] listening on http://localhost:{port.int}"
-var server = newAsyncHttpServer()
-let serverCallback = proc(request: Request): Future[void] {.gcsafe.} =
-  {.cast(gcsafe).}:
-    result = callback(request)
-asyncCheck libraryRefreshLoop()
-waitFor server.serve(port, serverCallback, address="0.0.0.0")
+when not defined(schedulerTests):
+  createDir(cacheDirectory)
+  randomize()
+  refreshLibrary()
+  echo &"[audio-server-nim] {tracks.len} tracks from {musicLibrary}"
+  echo &"[audio-server-nim] listening on http://localhost:{port.int}"
+  var server = newAsyncHttpServer()
+  let serverCallback = proc(request: Request): Future[void] {.gcsafe.} =
+    {.cast(gcsafe).}:
+      result = callback(request)
+  asyncCheck libraryRefreshLoop()
+  waitFor server.serve(port, serverCallback, address="0.0.0.0")

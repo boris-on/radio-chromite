@@ -1,22 +1,39 @@
 # RADIO CHROMITE
 
-Next.js frontend and Nim audio streaming backend.
+Веб-интерфейс на Next.js и отдельный аудиобэкенд на Nim. Бэкенд сканирует MP3-библиотеку, выбирает треки по ротации `исполнитель → альбом → трек`, извлекает обложки через FFmpeg и отдаёт аудио с поддержкой HTTP Range.
 
-## Configuration
+## Требования
 
-Copy `.env.example` to `.env`. The root `.env` file is the single place for
-machine-specific paths:
+- Node.js 20+ и npm;
+- Nim 2.0+ (в Docker используется Nim 2.2.10);
+- C-компилятор, совместимый с Nim: GCC/MinGW-w64 или Clang;
+- FFmpeg и FFprobe;
+- Docker с Compose — только для контейнерного запуска.
 
-```dotenv
-MUSIC_LIBRARY_PATH=/srv/radio-chromite/music
-# NORMALIZED_LIBRARY_PATH=/srv/radio-chromite/music-normalized
-# NIM_BIN_DIR=/opt/nim/bin
-# C_COMPILER_BIN_DIR=/opt/gcc/bin
-# FFMPEG_BIN_DIR=/opt/ffmpeg/bin
-RADIO_DOMAIN=radio.example.com
+Проверьте локальные инструменты:
+
+```powershell
+node --version
+npm --version
+nim --version
+gcc --version
+ffmpeg -version
+ffprobe -version
 ```
 
-On Windows, use native paths instead:
+## Настройка
+
+Скопируйте `.env.example` в `.env`:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+```bash
+cp .env.example .env
+```
+
+Корневой `.env` хранит машинно-зависимые пути. Пример для Windows:
 
 ```dotenv
 MUSIC_LIBRARY_PATH=C:\Music\Radio
@@ -27,109 +44,71 @@ MUSIC_LIBRARY_PATH=C:\Music\Radio
 RADIO_DOMAIN=radio.example.com
 ```
 
-Relative paths are resolved from the project directory. If no music path is set,
-the local fallback is the `music` directory in the project root.
-
-## Linux server with Docker Compose
-
-The deployment contains three containers:
-
-- `caddy` — public HTTPS reverse proxy on ports `80` and `443`;
-- `frontend` — internal Next.js interface;
-- `backend` — internal Nim audio server with FFmpeg.
-
-The browser uses same-origin `/api` requests through the frontend proxy. The
-frontend and backend ports are not exposed publicly.
-
-### 1. Configure the server
-
-```bash
-cp .env.example .env
-nano .env
-```
-
-Set at least:
+Пример для Linux:
 
 ```dotenv
 MUSIC_LIBRARY_PATH=/srv/radio-chromite/music
+# NORMALIZED_LIBRARY_PATH=/srv/radio-chromite/music-normalized
+# NIM_BIN_DIR=/opt/nim/bin
+# C_COMPILER_BIN_DIR=/opt/gcc/bin
+# FFMPEG_BIN_DIR=/opt/ffmpeg/bin
 RADIO_DOMAIN=radio.example.com
 ```
 
-The library must contain album directories with MP3 files:
+Относительные пути вычисляются от корня проекта. Если `MUSIC_LIBRARY_PATH` не задан, используется каталог `music` в проекте. `AUDIO_SERVER_PORT` по умолчанию равен `8789`.
+
+## Формат музыкальной библиотеки
+
+Название папки альбома должно иметь вид `ИСПОЛНИТЕЛЬ - АЛЬБОМ`. Название трека берётся из имени MP3-файла; префикс `ИСПОЛНИТЕЛЬ - ` можно не указывать:
 
 ```text
-/srv/radio-chromite/music/
-├── Album One/
-│   ├── Artist - Track One.mp3
-│   └── Artist - Track Two.mp3
-└── Album Two/
-    └── Artist - Track Three.mp3
+music/
+├── priorities.txt
+├── Orgy - Candyass/
+│   ├── Blue Monday.mp3
+│   └── Orgy - Stitches.mp3
+└── Zeromancer - Eurotrash/
+    └── Doctor Online.mp3
 ```
 
-Make sure Docker can read it:
+Необязательный `priorities.txt` задаёт вес трека внутри выбранного альбома:
 
-```bash
-chmod -R a+rX /srv/radio-chromite/music
+```text
+# относительный путь | вес
+Orgy - Candyass/Blue Monday.mp3 | 2
+Orgy - Candyass/Orgy - Stitches.mp3 | 1.5
+Zeromancer - Eurotrash/Doctor Online.mp3 | 3
 ```
 
-### 2. Build and start
+Вес по умолчанию — `1`. Вес `0` полностью исключает трек из ротации. Бэкенд перечитывает библиотеку и приоритеты каждые 30 секунд.
 
-```bash
-docker compose up -d --build
-```
+## Локальный запуск бэкенда
 
-Create an `A` DNS record (and `AAAA` when IPv6 is configured) for
-`RADIO_DOMAIN`. Allow inbound TCP ports `80` and `443`, plus UDP `443` for
-HTTP/3. Caddy obtains and renews the HTTPS certificate automatically.
+Из корня проекта выполните:
 
-Until `RADIO_DOMAIN` is configured, Compose still starts and Caddy serves the
-site over plain HTTP on port `80`. After adding the domain to `.env`, run
-`docker compose up -d` again to enable automatic HTTPS.
-
-### 3. Status and logs
-
-```bash
-docker compose ps
-docker compose logs -f caddy backend frontend
-curl https://radio.example.com/api/health
-```
-
-Update or stop:
-
-```bash
-git pull
-docker compose up -d --build
-docker compose down
-```
-
-The cover cache and Caddy certificates are stored in named volumes. A normal
-`docker compose down` preserves them; `docker compose down -v` removes them.
-
-The backend rescans the active music directory every 30 seconds, so newly added
-MP3 files appear without restarting the container.
-
-## Local development
-
-Install Node.js, Nim, FFmpeg and FFprobe, then create `.env` as described above.
-
-Start the frontend:
-
-```bash
+```powershell
 npm install
-npm run dev:frontend
-```
-
-Start the backend in a second terminal:
-
-```bash
 npm run backend
 ```
 
-If a local tool is not available through `PATH`, set `NIM_BIN_DIR`,
-`C_COMPILER_BIN_DIR` or `FFMPEG_BIN_DIR` in the root `.env` file.
+`npm run backend` переходит в `backend-nim`, компилирует release-версию через Nimble и сразу запускает её. Переменные `NIM_BIN_DIR`, `C_COMPILER_BIN_DIR` и `FFMPEG_BIN_DIR` из корневого `.env` автоматически добавляются в `PATH` дочернего процесса.
 
-The same commands work on Windows and Linux. There are also compatibility
-launchers:
+После запуска доступны:
+
+```text
+http://localhost:8789/api/health
+http://localhost:8789/api/tracks
+http://localhost:8789/api/random-track
+```
+
+Проверка из PowerShell:
+
+```powershell
+Invoke-RestMethod http://localhost:8789/api/health
+Invoke-RestMethod http://localhost:8789/api/random-track
+```
+
+Альтернативные обёртки запуска:
 
 ```powershell
 .\backend-nim\run.ps1
@@ -139,8 +118,134 @@ launchers:
 sh backend-nim/run.sh
 ```
 
-Normalize the configured library on either platform:
+## Отдельная сборка бэкенда
+
+Чтобы собрать бинарник без запуска:
+
+```powershell
+Set-Location backend-nim
+nimble build -d:release
+```
 
 ```bash
+cd backend-nim
+nimble build -d:release
+```
+
+Результат:
+
+- Windows: `backend-nim/radio_chromite_backend.exe`;
+- Linux: `backend-nim/radio_chromite_backend`.
+
+Запускайте готовый бинарник из корня проекта, чтобы относительные пути и `.cover-cache` оставались предсказуемыми:
+
+```powershell
+.\backend-nim\radio_chromite_backend.exe
+```
+
+```bash
+./backend-nim/radio_chromite_backend
+```
+
+Важно: готовый бинарник сам не загружает корневой `.env`. Перед прямым запуском задайте переменные окружения в терминале либо используйте `npm run backend`, который загружает `.env` автоматически.
+
+## Тесты планировщика
+
+```powershell
+nim c -r -d:schedulerTests backend-nim/tests/test_scheduler.nim
+```
+
+Тесты проверяют равномерность выбора исполнителей и альбомов, веса треков, нулевой вес, repeat windows, fallback и разбор `priorities.txt`.
+
+Быстрая проверка Nim-кода без вызова C-компилятора:
+
+```powershell
+nim check backend-nim/src/radio_chromite_backend.nim
+nim check -d:schedulerTests backend-nim/tests/test_scheduler.nim
+```
+
+## Нормализация громкости
+
+```powershell
 npm run normalize
+```
+
+По умолчанию результат записывается в `<MUSIC_LIBRARY_PATH>-normalized`. После успешного завершения бэкенд автоматически использует нормализованную библиотеку. Повторный запуск пропускает готовые файлы и удаляет из нормализованной библиотеки MP3, которых больше нет в оригинале.
+
+## Локальный запуск всего приложения
+
+Первый терминал:
+
+```powershell
+npm install
+npm run dev:frontend
+```
+
+Второй терминал:
+
+```powershell
+npm run backend
+```
+
+Интерфейс доступен по адресу `http://localhost:3000`, бэкенд — `http://localhost:8789`.
+
+## Docker Compose
+
+На Linux-сервере настройте `.env` как минимум так:
+
+```dotenv
+MUSIC_LIBRARY_PATH=/srv/radio-chromite/music
+RADIO_DOMAIN=radio.example.com
+```
+
+Затем разрешите Docker читать библиотеку и запустите сервисы:
+
+```bash
+chmod -R a+rX /srv/radio-chromite/music
+docker compose up -d --build
+```
+
+Compose запускает `caddy` (HTTPS reverse proxy), `frontend` (Next.js) и `backend` (Nim + FFmpeg). Состояние и логи:
+
+```bash
+docker compose ps
+docker compose logs -f caddy backend frontend
+curl https://radio.example.com/api/health
+```
+
+Обновление и остановка:
+
+```bash
+git pull
+docker compose up -d --build
+docker compose down
+```
+
+Обычный `docker compose down` сохраняет кэш обложек и сертификаты Caddy. `docker compose down -v` удаляет именованные тома вместе с данными.
+
+## Проблемы со сборкой на Windows
+
+Если `nim check` проходит, но `nimble build` завершается на `gcc.exe`, проверьте архитектуру инструментов и порядок каталогов в `PATH`:
+
+```powershell
+where.exe nim
+where.exe gcc
+$env:PATH = "C:\msys64\mingw64\bin;C:\nim\nim-2.2.10\bin;$env:PATH"
+Set-Location backend-nim
+nimble build -d:release
+```
+
+После обновления Nim или GCC удалите только кэш сборки и повторите команду:
+
+```powershell
+Remove-Item -Recurse -Force .\nimcache -ErrorAction SilentlyContinue
+Remove-Item -Recurse -Force .\.nimcache -ErrorAction SilentlyContinue
+nimble build -d:release
+```
+
+Если ошибка остаётся внутри сгенерированных файлов стандартной библиотеки Nim, переустановите согласованную пару Nim/MinGW-w64 либо соберите контейнер:
+
+```powershell
+docker compose build backend
+docker compose up -d backend
 ```

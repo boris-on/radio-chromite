@@ -68,7 +68,6 @@ const radarLayers: StyleSpecification["layers"] = [
 export default function MoscowRadarMap() {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
-  const radarRef = useRef<HTMLDivElement>(null);
   const probeMarkerRef = useRef<MapLibreMarker | null>(null);
   const radarFramesRef = useRef<RadarFrame[]>([]);
   const selectedFrameRef = useRef(0);
@@ -141,8 +140,6 @@ export default function MoscowRadarMap() {
     const updateMapState = () => {
       const center = activeMap.getCenter();
       setMapState({ lat: center.lat, lon: center.lng, zoom: activeMap.getZoom(), bearing: activeMap.getBearing() });
-      const radarPoint = activeMap.project(MOSCOW);
-      if (radarRef.current) radarRef.current.style.transform = `translate3d(${radarPoint.x}px,${radarPoint.y}px,0)`;
     };
 
     activeMap.once("style.load", () => {
@@ -284,13 +281,6 @@ export default function MoscowRadarMap() {
   return (
     <div className={`moscow-map-module ${sourceOnline ? "map-source-online" : "map-source-offline"}`}>
       <div ref={containerRef} className="moscow-map-canvas" />
-
-      <div ref={radarRef} className="map-radar" aria-hidden="true">
-        <span className="radar-fixed-axis radar-fixed-axis-h" />
-        <span className="radar-fixed-axis radar-fixed-axis-v" />
-        <span className="radar-node" />
-        <span className="radar-node-label">MOW_001</span>
-      </div>
 
       <div className="map-state-readout">
         <span>MAP_ZOOM</span><b>{mapState.zoom.toFixed(2)}</b>

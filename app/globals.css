@@ -240,11 +240,6 @@ button { color: inherit; }
 .moscow-map-module .maplibregl-ctrl-attrib { max-width:210px; padding:1px 3px !important; border-radius:0 !important; background:rgba(2,15,23,.82) !important; box-shadow:none !important; color:#638391 !important; font-size:5px !important; line-height:1.15 !important; }
 .moscow-map-module .maplibregl-ctrl-attrib a { color:#789aa7 !important; text-decoration:none; }
 .moscow-map-module .maplibregl-ctrl-attrib-button { width:15px; height:15px; opacity:.55; filter:grayscale(1) invert(.7); }
-.map-radar { position:absolute; z-index:4; left:0; top:0; width:0; height:0; pointer-events:none; color:#86aebb; }
-.radar-fixed-axis { position:absolute; left:0; top:0; width:25px; height:1px; background:linear-gradient(90deg,transparent,rgba(174,210,219,.66),transparent); transform:translate(-50%,-50%); }
-.radar-fixed-axis-v { transform:translate(-50%,-50%) rotate(90deg); }
-.radar-node { position:absolute; left:0; top:0; width:5px; height:5px; border:1px solid #b8d0d7; background:#789faa; transform:translate(-50%,-50%); box-shadow:0 0 0 2px rgba(87,145,161,.22); }
-.radar-node-label { position:absolute; z-index:6; left:11px; top:-9px; padding:2px 5px; border:1px solid rgba(119,177,195,.5); background:rgba(7,31,43,.86); color:#b1c9d1; font-size:6px; font-weight:700; letter-spacing:.12em; white-space:nowrap; box-shadow:2px 2px 0 rgba(0,0,0,.3); }
 .map-state-readout,.map-cursor-readout,.map-probe-readout { position:absolute; z-index:7; color:#6f919e; font-size:5px; line-height:1.35; letter-spacing:.07em; text-shadow:0 1px #01090e; pointer-events:none; }
 .map-state-readout { left:3px; top:3px; display:grid; grid-template-columns:auto auto; gap:1px 5px; padding:3px; background:rgba(2,17,25,.62); }
 .map-state-readout b { color:#a6bec7; text-align:right; font-weight:700; }

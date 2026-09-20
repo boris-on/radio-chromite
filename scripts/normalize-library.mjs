@@ -1,6 +1,6 @@
 import { spawn, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
-import { delimiter, dirname, extname, join, relative, resolve } from "node:path";
+import { existsSync, mkdirSync, readdirSync, renameSync, rmSync, rmdirSync, writeFileSync } from "node:fs";
+import { delimiter, dirname, extname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { loadEnvFile } from "node:process";
 import { fileURLToPath } from "node:url";
 
@@ -20,6 +20,16 @@ const force = process.argv.includes("--force");
 const completionMarker = join(outputRoot, ".normalization-complete");
 
 if (!existsSync(sourceRoot)) throw new Error(`Music library not found: ${sourceRoot}`);
+
+function isInside(parent, candidate) {
+  const path = relative(parent, candidate);
+  return path !== "" && path !== ".." && !path.startsWith(`..${sep}`) && !isAbsolute(path);
+}
+
+if (sourceRoot === outputRoot || isInside(sourceRoot, outputRoot) || isInside(outputRoot, sourceRoot)) {
+  throw new Error("Source and normalized library paths must be separate, non-nested directories.");
+}
+
 if (spawnSync("ffmpeg", ["-version"], { stdio: "ignore", windowsHide: true }).error) {
   throw new Error("FFmpeg is not installed or is not available in PATH.");
 }
@@ -32,6 +42,35 @@ function collectMp3(directory) {
     else if (entry.isFile() && extname(entry.name).toLowerCase() === ".mp3") files.push(path);
   }
   return files;
+}
+
+function pathKey(path) {
+  const normalized = path.replaceAll("\\", "/");
+  return process.platform === "win32" ? normalized.toLowerCase() : normalized;
+}
+
+function removeEmptyDirectories(directory) {
+  for (const entry of readdirSync(directory, { withFileTypes: true })) {
+    if (entry.isDirectory()) removeEmptyDirectories(join(directory, entry.name));
+  }
+  if (directory !== outputRoot && readdirSync(directory).length === 0) rmdirSync(directory);
+}
+
+function removeOrphanedMp3(sourceFiles) {
+  if (!existsSync(outputRoot)) return 0;
+  const sourcePaths = new Set(sourceFiles.map((file) => pathKey(relative(sourceRoot, file))));
+  let removed = 0;
+
+  for (const outputFile of collectMp3(outputRoot)) {
+    const outputPath = relative(outputRoot, outputFile);
+    if (sourcePaths.has(pathKey(outputPath))) continue;
+    rmSync(outputFile, { force: true });
+    removed++;
+    console.log(`[prune] removed ${outputPath}`);
+  }
+
+  removeEmptyDirectories(outputRoot);
+  return removed;
 }
 
 function runFfmpeg(args, captureStderr = false) {
@@ -55,9 +94,12 @@ function parseMeasurement(stderr) {
 }
 
 const files = collectMp3(sourceRoot);
+mkdirSync(outputRoot, { recursive: true });
+const removed = removeOrphanedMp3(files);
 console.log(`[normalize] ${files.length} MP3 files`);
 console.log(`[normalize] source: ${sourceRoot}`);
 console.log(`[normalize] output: ${outputRoot}`);
+console.log(`[normalize] ${removed} orphaned MP3 files removed`);
 
 let completed = 0;
 let skipped = 0;
