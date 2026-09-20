@@ -438,6 +438,13 @@ body { color:#9eb7c5; font-weight:500; }
 .system-grid .connection-online { color:#bff4e9; }
 .barcode { border-top:1px solid rgba(86,133,152,.4); }
 .signal-spectrum { display:block; width:100%; height:118px; margin:15px 0 10px; background:transparent; }
+.right-column { display:flex; flex-direction:column; }
+.right-column > .system-panel { order:1; margin-top:0; }
+.right-column > .signal-spectrum { order:2; }
+.right-column > .column-head { order:3; }
+.right-column > .recent-list { order:4; }
+.right-column > .barcode { order:5; }
+.right-column > .column-foot { order:6; }
 
 .bottom-data { border:1px solid rgba(95,142,161,.48); background:linear-gradient(90deg,rgba(26,67,83,.64),rgba(7,29,41,.58)); box-shadow:inset 0 0 0 1px rgba(4,18,26,.68); }
 .footer-strip { border-top:1px solid rgba(90,137,155,.4); background:#061722; color:#567c8b; }
@@ -544,14 +551,16 @@ body { color:#9eb7c5; font-weight:500; }
 }
 
 @media (max-width: 820px) {
-  .site-shell { min-height:1300px; }
-  .topline { padding:10px 18px 10px 20px; height:72px; }
+  html, body { width:100%; overflow-x:hidden; }
+  .site-shell { width:100%; min-width:0; min-height:100dvh; overflow:hidden; }
+  .topline { padding:10px 18px 10px 20px; height:64px; }
   .brand-title{font-size:11px;letter-spacing:.26em}.brand-sub{letter-spacing:.18em}.top-status{display:none}
   .micro-left { display:none; }
-  .radio-zone { display:block; padding:55px 18px 20px; min-height:auto; }
-  .disc-assembly { width:100%; max-width:none; min-width:0; height:auto; aspect-ratio:1; margin-top:28px; }
-  .cd-disc { width:min(86vw, 470px); }
-  .now-playing { position:relative; width:min(90vw, 470px); margin:-20px auto 0; padding-left:16px; }
+  .radio-zone { display:flex; flex-direction:column; padding:28px 18px 12px; min-height:auto; gap:30px; }
+  .now-playing { order:1; position:relative; box-sizing:border-box; width:100%; margin:0; padding:14px 0 4px 14px; }
+  .disc-assembly { order:2; width:100%; max-width:none; min-width:0; height:auto; aspect-ratio:1; margin:0; }
+  .cd-disc { width:min(76vw, 360px); }
+  .audio-inspector { height:auto; min-height:0; }
   .right-column { position:relative; top:auto; right:auto; width:calc(100% - 36px); max-width:none; min-width:0; margin:32px 18px 0; clip-path:polygon(0 0, 96% 0,100% 18px,100% 100%,4% 100%,0 calc(100% - 18px)); }
   .signal-spectrum { height:104px; }
   .moscow-panel { position:relative; top:auto; left:auto; width:calc(100% - 36px); min-width:0; margin:32px 18px 0; }
@@ -571,19 +580,70 @@ body { color:#9eb7c5; font-weight:500; }
 }
 
 @media (max-width: 520px) {
-  .brand-mark { width:30px;height:30px}.brand-title{font-size:9px}.brand-sub{font-size:6px}
-  .cd-disc { width:88vw; }
-  .disc-caption { left:8%; bottom:-16px; }
-  .now-playing { margin-top:16px; }
-  .artist { font-size:24px; }
+  .topline { height:58px; padding:8px 14px; }
+  .brand-block { gap:10px; min-width:0; }
+  .brand-mark { width:28px;height:28px; flex:0 0 auto}.brand-title{font-size:9px;letter-spacing:.2em}.brand-sub{font-size:5px;letter-spacing:.12em}
+  .radio-zone { padding:20px 12px 8px; gap:24px; }
+  .now-playing { padding-left:10px; }
+  .now-playing h1 { margin-top:13px; }
+  .track-identity .artist { font-size:clamp(18px,6vw,24px); }
+  .track-identity .track { font-size:10px; }
+  .track-code { letter-spacing:.1em; }
+  .telemetry-row { gap:10px; letter-spacing:.14em; }
+  .transport-controls button { min-height:42px; }
+  .audio-inspector,.tiny-copy { display:none; }
+  .disc-assembly { height:min(36svh, 320px); aspect-ratio:auto; }
+  .cd-disc { width:min(74vw, 34svh, 320px); }
+  .disc-caption { left:8%; bottom:0; }
   .recent-list { grid-template-columns:1fr; }
-  .right-column { margin-top:44px; }
+  .right-column,.moscow-panel { width:calc(100% - 24px); margin-left:12px; margin-right:12px; }
+  .right-column { margin-top:30px; }
   .moscow-panel-body { grid-template-columns:1fr 1fr; }
   .moscow-locator { display:block; grid-column:1/-1; grid-row:2; min-height:190px; }
   .moscow-location-data,.moscow-weather-data { padding:13px 9px; gap:10px 7px; }
   .moscow-panel-head { font-size:8px; }
-  .moscow-panel-foot { gap:12px; }
+  .moscow-panel-head b { display:none; }
+  .moscow-panel-foot { gap:8px; flex-wrap:wrap; justify-content:flex-start; }
+  .moscow-panel-foot span:last-child { text-align:left; }
+  .bottom-data { margin:24px 12px 42px; }
   .arc-a,.arc-b{font-size:5px;letter-spacing:.15em}.cd-serial{font-size:5px}
+}
+
+@media (max-width: 520px) and (max-height: 760px) {
+  .radio-zone { padding-top:12px; gap:12px; }
+  .now-playing { padding-top:8px; padding-bottom:0; }
+  .panel-index,.panel-rule,.track-code,.telemetry-block,.album-name { display:none; }
+  .now-playing h1 { margin:0 0 8px; }
+  .track { margin-bottom:8px; }
+  .playback-time { margin-top:6px; padding:5px 8px; }
+  .transport-controls { margin-top:7px; }
+  .transport-controls button { min-height:36px; }
+  .volume-control { margin-top:8px; }
+  .disc-assembly { height:min(38svh, 270px); }
+  .cd-disc { width:min(68vw, 36svh, 270px); }
+}
+
+@media (max-width: 820px) and (orientation: landscape) and (max-height: 600px) {
+  .topline { height:52px; padding-block:6px; }
+  .radio-zone {
+    display:grid;
+    grid-template-columns:minmax(0,1.08fr) minmax(0,.92fr);
+    grid-template-rows:1fr;
+    align-items:center;
+    min-height:calc(100svh - 52px);
+    padding:10px 16px;
+    gap:14px;
+  }
+  .now-playing { grid-column:1; height:auto; max-height:calc(100svh - 72px); overflow:hidden; }
+  .disc-assembly { grid-column:2; width:100%; height:calc(100svh - 72px); margin:0; aspect-ratio:auto; }
+  .cd-disc { width:min(38vw, calc(100svh - 92px)); }
+  .panel-index,.panel-rule,.track-code,.telemetry-block,.album-name,.audio-inspector,.tiny-copy { display:none; }
+  .now-playing h1 { margin:0 0 7px; }
+  .playback-time { margin-top:6px; padding:5px; }
+  .transport-controls { margin-top:6px; }
+  .transport-controls button { min-height:34px; }
+  .volume-control { margin-top:7px; }
+  .disc-caption { bottom:2px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
