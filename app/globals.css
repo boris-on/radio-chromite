@@ -580,21 +580,25 @@ body { color:#9eb7c5; font-weight:500; }
 }
 
 @media (max-width: 520px) {
-  .topline { height:58px; padding:8px 14px; }
+  .topline { height:52px; padding:6px 14px; }
   .brand-block { gap:10px; min-width:0; }
   .brand-mark { width:28px;height:28px; flex:0 0 auto}.brand-title{font-size:9px;letter-spacing:.2em}.brand-sub{font-size:5px;letter-spacing:.12em}
-  .radio-zone { padding:20px 12px 8px; gap:24px; }
-  .now-playing { padding-left:10px; }
-  .now-playing h1 { margin-top:13px; }
+  .radio-zone { padding:8px 12px 4px; gap:8px; }
+  .now-playing { padding:7px 0 0 10px; }
+  .panel-index,.panel-rule,.track-code,.album-name { display:none; }
+  .now-playing h1 { margin:0 0 7px; }
   .track-identity .artist { font-size:clamp(18px,6vw,24px); }
-  .track-identity .track { font-size:10px; }
-  .track-code { letter-spacing:.1em; }
-  .telemetry-row { gap:10px; letter-spacing:.14em; }
-  .transport-controls button { min-height:42px; }
+  .track-identity .track { margin:2px 0 7px; font-size:10px; }
+  .telemetry-block { padding:2px 0; }
+  .telemetry-row { gap:10px; padding:2px 3px 2px 0; font-size:6px; line-height:1.05; letter-spacing:.12em; }
+  .playback-time { margin-top:4px; padding:5px 8px; }
+  .transport-controls { margin-top:6px; }
+  .transport-controls button { min-height:34px; }
+  .volume-control { margin-top:7px; }
   .audio-inspector,.tiny-copy { display:none; }
-  .disc-assembly { height:min(36svh, 320px); aspect-ratio:auto; }
-  .cd-disc { width:min(74vw, 34svh, 320px); }
-  .disc-caption { left:8%; bottom:0; }
+  .disc-assembly { width:100%; height:auto; aspect-ratio:1; }
+  .cd-disc { width:100%; max-width:none; }
+  .disc-caption { left:8%; top:calc(100% + 7px); bottom:auto; }
   .recent-list { grid-template-columns:1fr; }
   .right-column,.moscow-panel { width:calc(100% - 24px); margin-left:12px; margin-right:12px; }
   .right-column { margin-top:30px; }
@@ -610,17 +614,15 @@ body { color:#9eb7c5; font-weight:500; }
 }
 
 @media (max-width: 520px) and (max-height: 760px) {
-  .radio-zone { padding-top:12px; gap:12px; }
-  .now-playing { padding-top:8px; padding-bottom:0; }
-  .panel-index,.panel-rule,.track-code,.telemetry-block,.album-name { display:none; }
-  .now-playing h1 { margin:0 0 8px; }
-  .track { margin-bottom:8px; }
-  .playback-time { margin-top:6px; padding:5px 8px; }
-  .transport-controls { margin-top:7px; }
-  .transport-controls button { min-height:36px; }
-  .volume-control { margin-top:8px; }
-  .disc-assembly { height:min(38svh, 270px); }
-  .cd-disc { width:min(68vw, 36svh, 270px); }
+  .topline { height:46px; }
+  .radio-zone { padding-top:4px; gap:4px; }
+  .now-playing { padding-top:4px; }
+  .now-playing h1 { margin-bottom:4px; }
+  .track-identity .track { margin-bottom:4px; }
+  .playback-time { margin-top:3px; padding-block:4px; }
+  .transport-controls { margin-top:4px; }
+  .transport-controls button { min-height:31px; }
+  .volume-control { margin-top:4px; }
 }
 
 @media (max-width: 820px) and (orientation: landscape) and (max-height: 600px) {
@@ -637,13 +639,13 @@ body { color:#9eb7c5; font-weight:500; }
   .now-playing { grid-column:1; height:auto; max-height:calc(100svh - 72px); overflow:hidden; }
   .disc-assembly { grid-column:2; width:100%; height:calc(100svh - 72px); margin:0; aspect-ratio:auto; }
   .cd-disc { width:min(38vw, calc(100svh - 92px)); }
-  .panel-index,.panel-rule,.track-code,.telemetry-block,.album-name,.audio-inspector,.tiny-copy { display:none; }
+  .panel-index,.panel-rule,.track-code,.album-name,.audio-inspector,.tiny-copy { display:none; }
   .now-playing h1 { margin:0 0 7px; }
   .playback-time { margin-top:6px; padding:5px; }
   .transport-controls { margin-top:6px; }
   .transport-controls button { min-height:34px; }
   .volume-control { margin-top:7px; }
-  .disc-caption { bottom:2px; }
+  .disc-caption { top:calc(100% + 5px); bottom:auto; }
 }
 
 @media (prefers-reduced-motion: reduce) {
