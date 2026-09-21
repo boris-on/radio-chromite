@@ -553,6 +553,7 @@ body { color:#9eb7c5; font-weight:500; }
 @media (max-width: 820px) {
   html, body { width:100%; overflow-x:hidden; }
   .site-shell { width:100%; min-width:0; min-height:100dvh; overflow:hidden; }
+  .site-shell::before,.site-shell::after,.scanlines,.crt-vignette { position:absolute; }
   .topline { padding:10px 18px 10px 20px; height:64px; }
   .brand-title{font-size:11px;letter-spacing:.26em}.brand-sub{letter-spacing:.18em}.top-status{display:none}
   .micro-left { display:none; }
