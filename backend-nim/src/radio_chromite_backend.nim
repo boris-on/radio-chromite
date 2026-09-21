@@ -11,12 +11,20 @@ type
     httpStatus: int
     requestId: string
 
+  SessionState = ref object
+    selectionHistory: seq[Track]
+    lastSeenAt: float
+
 const
   ChunkSize = 64 * 1024
   MetadataCacheLimit = 5
   ArtistRepeatWindow = 5
   AlbumRepeatWindow = 12
   TrackRepeatWindow = 50
+  SessionHistoryLimit = TrackRepeatWindow
+  SessionTtlSeconds = 24 * 60 * 60
+  SessionCleanupIntervalMs = 10 * 60 * 1000
+  SessionIdMaxLength = 128
   LibraryRescanIntervalMs = 30_000
   FallbackRuleSets = [
     (artistWindow: 5, albumWindow: 12, trackWindow: 50),
@@ -41,7 +49,7 @@ var
   metadataCache = initOrderedTable[string, JsonNode]()
   metrics = ServerMetrics(httpStatus: 200, requestId: "RX-000000")
   trackCatalogueJson = "[]"
-  selectionHistory: seq[Track]
+  sessions = initTable[string, SessionState]()
   priorityEntryCount: int
   libraryScanCount: int64
   lastLibraryScanAt: float
@@ -115,7 +123,8 @@ proc scanLibrary(priorities: Table[string, float64]) =
 proc corsHeaders(contentType = "application/json; charset=utf-8"): HttpHeaders =
   result = newHttpHeaders()
   result["Access-Control-Allow-Origin"] = "*"
-  result["Access-Control-Allow-Headers"] = "Range, Content-Type"
+  result["Access-Control-Allow-Headers"] = "Range, Content-Type, X-Radio-Session"
+  result["Access-Control-Allow-Methods"] = "GET, HEAD, OPTIONS"
   result["Access-Control-Expose-Headers"] = "Content-Length, Content-Range, Accept-Ranges"
   result["Content-Type"] = contentType
 
@@ -293,22 +302,22 @@ proc albumKey(artist, album: string): string =
 proc albumKey(track: Track): string =
   albumKey(track.artist, track.album)
 
-proc trackWasRecent(id: string, window: int): bool =
-  let first = max(0, selectionHistory.len - window)
-  for index in first ..< selectionHistory.len:
-    if selectionHistory[index].id == id: return true
+proc trackWasRecent(history: seq[Track], id: string, window: int): bool =
+  let first = max(0, history.len - window)
+  for index in first ..< history.len:
+    if history[index].id == id: return true
 
-proc artistWasRecent(artist: string, window: int): bool =
+proc artistWasRecent(history: seq[Track], artist: string, window: int): bool =
   let wanted = normalized(artist)
-  let first = max(0, selectionHistory.len - window)
-  for index in first ..< selectionHistory.len:
-    if normalized(selectionHistory[index].artist) == wanted: return true
+  let first = max(0, history.len - window)
+  for index in first ..< history.len:
+    if normalized(history[index].artist) == wanted: return true
 
-proc albumWasRecent(artist, album: string, window: int): bool =
+proc albumWasRecent(history: seq[Track], artist, album: string, window: int): bool =
   let wanted = albumKey(artist, album)
-  let first = max(0, selectionHistory.len - window)
-  for index in first ..< selectionHistory.len:
-    if albumKey(selectionHistory[index]) == wanted: return true
+  let first = max(0, history.len - window)
+  for index in first ..< history.len:
+    if albumKey(history[index]) == wanted: return true
 
 proc uniqueArtists(): seq[string] =
   var seen = initTable[string, bool]()
@@ -329,21 +338,21 @@ proc uniqueAlbums(artist: string): seq[string] =
       seen[key] = true
       result.add(track.album)
 
-proc eligibleArtists(window: int): seq[string] =
+proc eligibleArtists(history: seq[Track], window: int): seq[string] =
   for artist in uniqueArtists():
-    if not artistWasRecent(artist, window): result.add(artist)
+    if not artistWasRecent(history, artist, window): result.add(artist)
 
-proc eligibleAlbums(artist: string, window: int): seq[string] =
+proc eligibleAlbums(history: seq[Track], artist: string, window: int): seq[string] =
   for album in uniqueAlbums(artist):
-    if not albumWasRecent(artist, album, window): result.add(album)
+    if not albumWasRecent(history, artist, album, window): result.add(album)
 
-proc eligibleTracks(artist, album: string, window: int, excludeId: string): seq[Track] =
+proc eligibleTracks(history: seq[Track], artist, album: string, window: int, excludeId: string): seq[Track] =
   let wantedArtist = normalized(artist)
   let wantedAlbum = albumKey(artist, album)
   for track in tracks:
     if track.weight <= 0 or track.id == excludeId: continue
     if normalized(track.artist) != wantedArtist or albumKey(track) != wantedAlbum: continue
-    if not trackWasRecent(track.id, window): result.add(track)
+    if not trackWasRecent(history, track.id, window): result.add(track)
 
 proc weightedRandomTrack(candidates: seq[Track]): Track =
   var total = 0.0
@@ -356,28 +365,53 @@ proc weightedRandomTrack(candidates: seq[Track]): Track =
     if target < cumulative: return track
   candidates[^1]
 
-proc recordSelection(track: Track) =
-  selectionHistory.add(track)
-  let historyLimit = max(ArtistRepeatWindow, max(AlbumRepeatWindow, TrackRepeatWindow))
-  if selectionHistory.len > historyLimit:
-    selectionHistory.delete(0 .. selectionHistory.len - historyLimit - 1)
+proc recordSelection(state: SessionState, track: Track) =
+  state.selectionHistory.add(track)
+  if state.selectionHistory.len > SessionHistoryLimit:
+    state.selectionHistory.delete(0 .. state.selectionHistory.len - SessionHistoryLimit - 1)
 
-proc selectNextTrack(excludeId = ""): Track =
+proc selectNextTrack(state: SessionState, excludeId = ""): Track =
+  let history = state.selectionHistory
   for fallbackLevel, rules in FallbackRuleSets:
-    var artists = eligibleArtists(rules.artistWindow)
+    var artists = eligibleArtists(history, rules.artistWindow)
     artists.shuffle()
     for artist in artists:
-      var albums = eligibleAlbums(artist, rules.albumWindow)
+      var albums = eligibleAlbums(history, artist, rules.albumWindow)
       albums.shuffle()
       for album in albums:
-        let candidates = eligibleTracks(artist, album, rules.trackWindow, excludeId)
+        let candidates = eligibleTracks(history, artist, album, rules.trackWindow, excludeId)
         if candidates.len == 0: continue
         result = weightedRandomTrack(candidates)
         if not result.isNil:
           if fallbackLevel > 0:
             echo &"[audio-server-nim] scheduler fallback level={fallbackLevel}"
-          recordSelection(result)
+          recordSelection(state, result)
           return
+
+proc validSessionId(value: string): bool =
+  if value.len == 0 or value.len > SessionIdMaxLength or value != value.strip(): return false
+  for character in value:
+    if not (character.isAlphaNumeric or character in {'-', '_', '.', ':'}): return false
+  true
+
+proc isRandomTrackPath(path: string): bool =
+  path == "/api/random-track" or path.startsWith("/api/random-track/")
+
+proc sessionState(sessionId: string, now = epochTime()): SessionState =
+  if not sessions.hasKey(sessionId):
+    sessions[sessionId] = SessionState(lastSeenAt: now)
+  result = sessions[sessionId]
+  result.lastSeenAt = now
+
+proc cleanupExpiredSessions(now = epochTime()) =
+  for sessionId in sessions.keys.toSeq():
+    if now - sessions[sessionId].lastSeenAt > SessionTtlSeconds.float:
+      sessions.del(sessionId)
+
+proc sessionCleanupLoop() {.async.} =
+  while true:
+    await sleepAsync(SessionCleanupIntervalMs)
+    cleanupExpiredSessions()
 
 proc callback(request: Request) {.async.} =
   inc metrics.totalRequests
@@ -389,7 +423,7 @@ proc callback(request: Request) {.async.} =
       await request.respond(Http204, "", headers)
     elif path == "/api/health":
       await sendJson(request,Http200,%*{"ok":true,"tracks":tracks.len,"library":musicLibrary,"backend":"nim","scheduler":{
-        "historySize":selectionHistory.len,"artistWindow":ArtistRepeatWindow,
+        "activeSessions":sessions.len,"artistWindow":ArtistRepeatWindow,
         "albumWindow":AlbumRepeatWindow,"trackWindow":TrackRepeatWindow,
         "priorityFile":"priorities.txt","priorityEntries":priorityEntryCount},"libraryWatcher":{
         "intervalSeconds":LibraryRescanIntervalMs div 1000,"scanCount":libraryScanCount,
@@ -398,9 +432,13 @@ proc callback(request: Request) {.async.} =
         "bytesRx":metrics.bytesRx,"openStreams":metrics.openStreams,"httpStatus":metrics.httpStatus,
         "uptimeSeconds":int(epochTime()-startedAt),"memRss":getOccupiedMem()}})
     elif path == "/api/tracks": await sendJsonText(request, Http200, trackCatalogueJson)
-    elif path == "/api/random-track" or path.startsWith("/api/random-track/"):
+    elif isRandomTrackPath(path):
+      let sessionId = $request.headers.getOrDefault("X-Radio-Session")
+      if not validSessionId(sessionId):
+        await sendJson(request, Http400, %*{"error":"Missing or invalid X-Radio-Session"})
+        return
       let excludeId = if path.len > 18: path[18 .. ^1] else: ""
-      let selected = selectNextTrack(excludeId)
+      let selected = selectNextTrack(sessionState(sessionId), excludeId)
       if selected.isNil:
         await sendJson(request, Http503, %*{
           "error":"No other playable track is available",
@@ -450,4 +488,5 @@ when not defined(schedulerTests):
     {.cast(gcsafe).}:
       result = callback(request)
   asyncCheck libraryRefreshLoop()
+  asyncCheck sessionCleanupLoop()
   waitFor server.serve(port, serverCallback, address="0.0.0.0")

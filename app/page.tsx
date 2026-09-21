@@ -5,6 +5,7 @@ import MoscowRadarMap from "../components/MoscowRadarMap";
 import SignalSpectrum from "../components/SignalSpectrum";
 
 const AUDIO_API = (process.env.NEXT_PUBLIC_AUDIO_API_URL ?? "").replace(/\/$/, "");
+const PLAYER_SESSION_KEY = "radio-chromite-session-id";
 
 type Track = {
   id: string;
@@ -46,6 +47,14 @@ const formatUptime = (seconds: number) => `${pad(Math.floor(seconds / 3600))}:${
 const windCardinal = (degrees: number) => ["N", "NE", "E", "SE", "S", "SW", "W", "NW"][Math.round(degrees / 45) % 8];
 const apiClock = (value?: string) => value?.slice(11, 16) || "--:--";
 
+function playerSessionId(): string {
+  const existing = window.sessionStorage.getItem(PLAYER_SESSION_KEY);
+  if (existing) return existing;
+  const created = window.crypto.randomUUID();
+  window.sessionStorage.setItem(PLAYER_SESSION_KEY, created);
+  return created;
+}
+
 function TelemetryRow({ label, value, active = false }: { label: string; value: string; active?: boolean }) {
   return (
     <div className="telemetry-row">
@@ -67,7 +76,11 @@ function MetalAsset({ src, className, alt }: { src: string; className: string; a
 
 async function requestRandomTrack(excludeId?: string, signal?: AbortSignal): Promise<Track> {
   const suffix = excludeId ? `/${encodeURIComponent(excludeId)}` : "";
-  const response = await fetch(apiUrl(`/api/random-track${suffix}`), { signal, cache: "no-store" });
+  const response = await fetch(apiUrl(`/api/random-track${suffix}`), {
+    signal,
+    cache: "no-store",
+    headers: { "X-Radio-Session": playerSessionId() },
+  });
   if (!response.ok) throw new Error("No random track available");
   return response.json() as Promise<Track>;
 }
