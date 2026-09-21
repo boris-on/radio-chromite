@@ -47,6 +47,19 @@ const formatUptime = (seconds: number) => `${pad(Math.floor(seconds / 3600))}:${
 const windCardinal = (degrees: number) => ["N", "NE", "E", "SE", "S", "SW", "W", "NW"][Math.round(degrees / 45) % 8];
 const apiClock = (value?: string) => value?.slice(11, 16) || "--:--";
 
+function syncMediaPosition(audio: HTMLAudioElement) {
+  if (!("mediaSession" in navigator) || !Number.isFinite(audio.duration) || audio.duration <= 0) return;
+  try {
+    navigator.mediaSession.setPositionState({
+      duration: audio.duration,
+      playbackRate: audio.playbackRate || 1,
+      position: Math.min(audio.duration, Math.max(0, audio.currentTime)),
+    });
+  } catch {
+    // Some mobile browsers expose Media Session without position support.
+  }
+}
+
 function playerSessionId(): string {
   const existing = window.sessionStorage.getItem(PLAYER_SESSION_KEY);
   if (existing) return existing;
@@ -352,6 +365,55 @@ export default function Home() {
     }
   };
 
+  useEffect(() => {
+    if (!("mediaSession" in navigator) || !currentTrack) return;
+    const artworkUrl = new URL(apiUrl(currentTrack.coverUrl), window.location.href).href;
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: currentTrack.title,
+      artist: currentTrack.artist,
+      album: currentTrack.album,
+      artwork: [{ src: artworkUrl, type: "image/jpeg" }],
+    });
+    if (audioRef.current) syncMediaPosition(audioRef.current);
+  }, [currentTrack]);
+
+  useEffect(() => {
+    if (!("mediaSession" in navigator)) return;
+    const mediaSession = navigator.mediaSession;
+    const setHandler = (action: MediaSessionAction, handler: MediaSessionActionHandler | null) => {
+      try { mediaSession.setActionHandler(action, handler); } catch { /* Unsupported action. */ }
+    };
+
+    setHandler("play", () => { if (audioRef.current?.paused) void togglePlayback(); });
+    setHandler("pause", () => { if (audioRef.current && !audioRef.current.paused) void togglePlayback(); });
+    setHandler("previoustrack", () => { void previousTrack(); });
+    setHandler("nexttrack", () => { void nextTrack(true); });
+    setHandler("seekbackward", (details) => {
+      const audio = audioRef.current;
+      if (!audio) return;
+      audio.currentTime = Math.max(0, audio.currentTime - (details.seekOffset ?? 10));
+      syncMediaPosition(audio);
+    });
+    setHandler("seekforward", (details) => {
+      const audio = audioRef.current;
+      if (!audio) return;
+      audio.currentTime = Math.min(audio.duration || Infinity, audio.currentTime + (details.seekOffset ?? 10));
+      syncMediaPosition(audio);
+    });
+    setHandler("seekto", (details) => {
+      const audio = audioRef.current;
+      if (!audio || details.seekTime === undefined) return;
+      audio.currentTime = details.seekTime;
+      syncMediaPosition(audio);
+    });
+
+    return () => {
+      for (const action of ["play", "pause", "previoustrack", "nexttrack", "seekbackward", "seekforward", "seekto"] as MediaSessionAction[]) {
+        setHandler(action, null);
+      }
+    };
+  }, [currentTrack?.id, isPlaying, history.length, forwardHistory.length]);
+
   const readingMetadata = "READING MPEG FRAME DATA...";
   const metadataValue = (format: (metadata: TechnicalMetadata) => string) => technical ? format(technical) : readingMetadata;
 
@@ -362,15 +424,26 @@ export default function Home() {
         crossOrigin="anonymous"
         autoPlay
         preload="auto"
-        onPlaying={() => setIsPlaying(true)}
-        onPause={() => setIsPlaying(false)}
+        onPlaying={(event) => {
+          setIsPlaying(true);
+          if ("mediaSession" in navigator) navigator.mediaSession.playbackState = "playing";
+          syncMediaPosition(event.currentTarget);
+        }}
+        onPause={() => {
+          setIsPlaying(false);
+          if ("mediaSession" in navigator) navigator.mediaSession.playbackState = "paused";
+        }}
         onWaiting={() => setBuffering(true)}
         onCanPlay={() => setBuffering(false)}
-        onLoadedMetadata={(event) => setDuration(Number.isFinite(event.currentTarget.duration) ? event.currentTarget.duration : 0)}
+        onLoadedMetadata={(event) => {
+          setDuration(Number.isFinite(event.currentTarget.duration) ? event.currentTarget.duration : 0);
+          syncMediaPosition(event.currentTarget);
+        }}
         onTimeUpdate={(event) => {
           const audio = event.currentTarget;
           setCurrentSecond(audio.currentTime);
           setBufferAhead(audio.buffered.length ? Math.max(0, audio.buffered.end(audio.buffered.length - 1) - audio.currentTime) : 0);
+          syncMediaPosition(audio);
         }}
         onProgress={(event) => {
           const audio = event.currentTarget;
