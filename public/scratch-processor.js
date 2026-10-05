@@ -22,6 +22,12 @@ class RadioScratchProcessor extends AudioWorkletProcessor {
         this.channels = data.channels;
         this.sourceSampleRate = data.sampleRate;
         this.position = 0;
+      } else if (data.type === "clear") {
+        this.channels = [];
+        this.position = 0;
+        this.active = false;
+        this.level = 0;
+        this.smoothedSpeed = 0;
       } else if (data.type === "seek") {
         this.position = Math.max(0, data.time * this.sourceSampleRate);
       } else if (data.type === "active") {

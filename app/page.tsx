@@ -98,6 +98,14 @@ async function requestRandomTrack(excludeId?: string, signal?: AbortSignal): Pro
   return response.json() as Promise<Track>;
 }
 
+function replaceAudioSource(audio: HTMLAudioElement, source: string) {
+  audio.pause();
+  audio.removeAttribute("src");
+  audio.load();
+  audio.src = source;
+  audio.load();
+}
+
 export default function Home() {
   const audioRef = useRef<HTMLAudioElement>(null);
   const discRef = useRef<HTMLButtonElement>(null);
@@ -251,10 +259,9 @@ export default function Home() {
         void setUpcomingTrack(initialTrack.id, controller.signal);
         if (audioRef.current) {
           const audio = audioRef.current;
-          audio.src = apiUrl(initialTrack.streamUrl);
+          replaceAudioSource(audio, apiUrl(initialTrack.streamUrl));
           audio.volume = volume;
           audio.autoplay = true;
-          audio.load();
           setBuffering(true);
           void audio.play()
             .then(() => {
@@ -311,11 +318,9 @@ export default function Home() {
     setPlaybackError(false);
     if (!audio) return;
 
-    audio.pause();
     setBuffering(shouldPlay);
-    audio.src = apiUrl(track.streamUrl);
+    replaceAudioSource(audio, apiUrl(track.streamUrl));
     audio.volume = volume;
-    audio.load();
     if (!shouldPlay) {
       setIsPlaying(false);
       return;
