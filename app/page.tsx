@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import MoscowRadarMap from "../components/MoscowRadarMap";
-import SignalSpectrum from "../components/SignalSpectrum";
+import SignalSpectrum, { beginScratchPlayback, endScratchPlayback, prepareScratchTrack, setScratchSpeed } from "../components/SignalSpectrum";
 
 const AUDIO_API = (process.env.NEXT_PUBLIC_AUDIO_API_URL ?? "").replace(/\/$/, "");
 const PLAYER_SESSION_KEY = "radio-chromite-session-id";
@@ -100,12 +100,16 @@ async function requestRandomTrack(excludeId?: string, signal?: AbortSignal): Pro
 
 export default function Home() {
   const audioRef = useRef<HTMLAudioElement>(null);
+  const discRef = useRef<HTMLButtonElement>(null);
+  const discRotationRef = useRef(0);
   const currentTrackRef = useRef<Track | null>(null);
   const upcomingTrackRef = useRef<Track | null>(null);
   const upcomingRequestRef = useRef<Promise<Track | null> | null>(null);
   const previousLatencyRef = useRef<number | null>(null);
   const serverStateKnownRef = useRef(false);
   const wasServerOnlineRef = useRef(false);
+  const scratchRef = useRef({ active: false, pointerId: -1, angle: 0, rotation: 0, moved: 0, lastMoveAt: 0, wasPaused: true });
+  const suppressDiscClickRef = useRef(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [hasStarted, setHasStarted] = useState(false);
   const [buffering, setBuffering] = useState(false);
@@ -130,6 +134,23 @@ export default function Home() {
   const [jitter, setJitter] = useState(0);
   const [reconnects, setReconnects] = useState(0);
   const [bufferAhead, setBufferAhead] = useState(0);
+  const [isScratching, setIsScratching] = useState(false);
+
+  useEffect(() => {
+    let frameId = 0;
+    let previousTime = performance.now();
+    const animateDisc = (now: number) => {
+      const elapsed = Math.min(0.1, Math.max(0, (now - previousTime) / 1_000));
+      previousTime = now;
+      if (!scratchRef.current.active && audioRef.current && !audioRef.current.paused) {
+        discRotationRef.current += elapsed * Math.PI * 2 / 4.8;
+      }
+      if (discRef.current) discRef.current.style.transform = `rotate(${discRotationRef.current}rad)`;
+      frameId = window.requestAnimationFrame(animateDisc);
+    };
+    frameId = window.requestAnimationFrame(animateDisc);
+    return () => window.cancelAnimationFrame(frameId);
+  }, []);
 
   useEffect(() => {
     const tick = () => {
@@ -343,7 +364,7 @@ export default function Home() {
     const audio = audioRef.current;
     if (!audio || !currentTrack) return;
 
-    if (isPlaying) {
+    if (!audio.paused) {
       audio.pause();
       setIsPlaying(false);
       setBuffering(false);
@@ -363,6 +384,89 @@ export default function Home() {
     } finally {
       setBuffering(false);
     }
+  };
+
+  const scratchAngle = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    const bounds = event.currentTarget.getBoundingClientRect();
+    return Math.atan2(event.clientY - (bounds.top + bounds.height / 2), event.clientX - (bounds.left + bounds.width / 2));
+  };
+
+  const startScratch = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    const audio = audioRef.current;
+    if (!audio || !currentTrack) return;
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    scratchRef.current = {
+      active: true,
+      pointerId: event.pointerId,
+      angle: scratchAngle(event),
+      rotation: discRotationRef.current,
+      moved: 0,
+      lastMoveAt: performance.now(),
+      wasPaused: audio.paused,
+    };
+    suppressDiscClickRef.current = false;
+    audio.pause();
+    audio.playbackRate = 1;
+    void prepareScratchTrack(audio);
+    beginScratchPlayback(audio, audio.currentTime);
+    setBuffering(false);
+    setIsScratching(true);
+  };
+
+  const moveScratch = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    const audio = audioRef.current;
+    const scratch = scratchRef.current;
+    if (!audio || !scratch.active || scratch.pointerId !== event.pointerId) return;
+    event.preventDefault();
+    const angle = scratchAngle(event);
+    let delta = angle - scratch.angle;
+    if (delta > Math.PI) delta -= Math.PI * 2;
+    if (delta < -Math.PI) delta += Math.PI * 2;
+    scratch.angle = angle;
+    if (Math.abs(delta) < 0.002) return;
+
+    scratch.rotation += delta;
+    discRotationRef.current = scratch.rotation;
+    scratch.moved += Math.abs(delta);
+    event.currentTarget.style.transform = `rotate(${discRotationRef.current}rad)`;
+    const seekDelta = delta / (Math.PI * 2) * 2.8;
+    audio.currentTime = Math.min(audio.duration || Infinity, Math.max(0, audio.currentTime + seekDelta));
+    const now = performance.now();
+    const elapsed = Math.max(0.008, (now - scratch.lastMoveAt) / 1_000);
+    setScratchSpeed(audio, seekDelta / elapsed);
+    scratch.lastMoveAt = now;
+  };
+
+  const stopScratch = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    const audio = audioRef.current;
+    const scratch = scratchRef.current;
+    if (!scratch.active || scratch.pointerId !== event.pointerId) return;
+    scratch.active = false;
+    suppressDiscClickRef.current = scratch.moved > 0.035;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+    if (audio) {
+      endScratchPlayback(audio);
+      audio.playbackRate = 1;
+      if (scratch.wasPaused) {
+        audio.pause();
+        setIsPlaying(false);
+        setBuffering(false);
+      } else {
+        setBuffering(true);
+        void audio.play()
+          .then(() => {
+            setIsPlaying(true);
+            setPlaybackError(false);
+          })
+          .catch(() => {
+            setIsPlaying(false);
+            setPlaybackError(true);
+          })
+          .finally(() => setBuffering(false));
+      }
+    }
+    setIsScratching(false);
   };
 
   useEffect(() => {
@@ -521,7 +625,22 @@ export default function Home() {
         <div className="disc-assembly">
           <div className="disc-axis axis-horizontal" aria-hidden="true" />
           <div className="disc-axis axis-vertical" aria-hidden="true" />
-          <button className={`cd-disc ${hasStarted ? "disc-spinning" : ""} ${hasStarted && !isPlaying ? "disc-paused" : ""}`} onClick={togglePlayback} aria-label={isPlaying ? "Pause radio" : "Play radio"}>
+          <button
+            ref={discRef}
+            className={`cd-disc ${hasStarted ? "disc-spinning" : ""} ${hasStarted && !isPlaying ? "disc-paused" : ""} ${isScratching ? "is-scratching" : ""}`}
+            onClick={() => {
+              if (suppressDiscClickRef.current) {
+                suppressDiscClickRef.current = false;
+                return;
+              }
+              void togglePlayback();
+            }}
+            onPointerDown={startScratch}
+            onPointerMove={moveScratch}
+            onPointerUp={stopScratch}
+            onPointerCancel={stopScratch}
+            aria-label={isPlaying ? "Pause radio" : "Play radio"}
+          >
             {/* External CD artwork: Pixabay Content License */}
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img className="cd-image" src="https://cdn.pixabay.com/photo/2013/07/12/18/04/dvd-152917_1280.png" alt="" draggable={false} />

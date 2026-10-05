@@ -10,6 +10,15 @@ type AudioGraph = {
   context: AudioContext;
   analyser: AnalyserNode;
   source: MediaElementAudioSourceNode;
+  scratchTrackUrl?: string;
+  scratchTrackReady?: boolean;
+  scratchTrackDuration?: number;
+  scratchTrackPromise?: Promise<boolean>;
+  scratchNode?: AudioWorkletNode;
+  scratchGain?: GainNode;
+  scratchWorkletPromise?: Promise<AudioWorkletNode | undefined>;
+  scratchRequestedActive?: boolean;
+  scratchRequestedPosition?: number;
 };
 
 const audioGraphProperty = "__radioChromiteAudioGraph" as const;
@@ -34,6 +43,107 @@ function getAudioGraph(audio: SpectrumAudioElement): AudioGraph {
   const graph = { context, analyser, source };
   Object.defineProperty(audio, audioGraphProperty, { value: graph });
   return graph;
+}
+
+async function ensureScratchNode(graph: AudioGraph) {
+  if (graph.scratchNode) return graph.scratchNode;
+  if (graph.scratchWorkletPromise) return graph.scratchWorkletPromise;
+  if (!graph.context.audioWorklet) return undefined;
+
+  graph.scratchWorkletPromise = graph.context.audioWorklet.addModule("/scratch-processor.js")
+    .then(() => {
+      const node = new AudioWorkletNode(graph.context, "radio-scratch-processor", {
+        numberOfInputs: 0,
+        numberOfOutputs: 1,
+        outputChannelCount: [2],
+      });
+      const gain = graph.context.createGain();
+      gain.gain.value = 0.9;
+      node.connect(gain).connect(graph.context.destination);
+      graph.scratchNode = node;
+      graph.scratchGain = gain;
+      return node;
+    })
+    .catch(() => undefined)
+    .finally(() => { graph.scratchWorkletPromise = undefined; });
+  return graph.scratchWorkletPromise;
+}
+
+export function prepareScratchTrack(audio: HTMLAudioElement): Promise<boolean> {
+  const graph = getAudioGraph(audio as SpectrumAudioElement);
+  const url = audio.currentSrc || audio.src;
+  if (!url) return Promise.resolve(false);
+  if (graph.scratchTrackUrl === url && graph.scratchTrackReady) return Promise.resolve(true);
+  if (graph.scratchTrackUrl === url && graph.scratchTrackPromise) return graph.scratchTrackPromise;
+
+  graph.scratchTrackUrl = url;
+  graph.scratchTrackReady = false;
+  const pending = fetch(url, { cache: "force-cache" })
+    .then((response) => {
+      if (!response.ok) throw new Error("Scratch audio unavailable");
+      return response.arrayBuffer();
+    })
+    .then((encoded) => graph.context.decodeAudioData(encoded))
+    .then(async (decoded) => {
+      const node = await ensureScratchNode(graph);
+      if (!node || graph.scratchTrackUrl !== url) return false;
+      const channels = Array.from({ length: decoded.numberOfChannels }, (_, index) =>
+        new Float32Array(decoded.getChannelData(index))
+      );
+      node.port.postMessage({
+        type: "buffer",
+        channels,
+        sampleRate: decoded.sampleRate,
+      }, channels.map((channel) => channel.buffer));
+      graph.scratchTrackDuration = decoded.duration;
+      graph.scratchTrackReady = true;
+      return true;
+    })
+    .catch(() => false)
+    .finally(() => {
+      if (graph.scratchTrackUrl === url) graph.scratchTrackPromise = undefined;
+    });
+  graph.scratchTrackPromise = pending;
+  return pending;
+}
+
+export function beginScratchPlayback(audio: HTMLAudioElement, position: number) {
+  const graph = getAudioGraph(audio as SpectrumAudioElement);
+  graph.scratchRequestedActive = true;
+  graph.scratchRequestedPosition = position;
+  if (graph.context.state === "suspended") void graph.context.resume().catch(() => undefined);
+  const activate = () => {
+    if (!graph.scratchRequestedActive || !graph.scratchNode || graph.scratchTrackUrl !== (audio.currentSrc || audio.src)) return;
+    graph.scratchGain!.gain.value = Math.max(0.08, audio.volume);
+    graph.scratchNode.port.postMessage({ type: "seek", time: graph.scratchRequestedPosition ?? position });
+    graph.scratchNode.port.postMessage({ type: "active", value: true });
+  };
+  if (graph.scratchTrackReady) activate();
+  else void prepareScratchTrack(audio).then((ready) => { if (ready) activate(); });
+}
+
+export function setScratchSpeed(audio: HTMLAudioElement, speed: number) {
+  const graph = getAudioGraph(audio as SpectrumAudioElement);
+  const parameter = graph.scratchNode?.parameters.get("speed");
+  if (!parameter) return;
+  const now = graph.context.currentTime;
+  const limitedSpeed = Math.min(12, Math.max(-12, speed));
+  parameter.cancelScheduledValues(now);
+  parameter.setValueAtTime(parameter.value, now);
+  parameter.linearRampToValueAtTime(limitedSpeed, now + 0.012);
+  parameter.setTargetAtTime(0, now + 0.028, 0.032);
+}
+
+export function endScratchPlayback(audio: HTMLAudioElement) {
+  const graph = getAudioGraph(audio as SpectrumAudioElement);
+  graph.scratchRequestedActive = false;
+  const parameter = graph.scratchNode?.parameters.get("speed");
+  if (parameter) {
+    const now = graph.context.currentTime;
+    parameter.cancelScheduledValues(now);
+    parameter.setTargetAtTime(0, now, 0.012);
+  }
+  graph.scratchNode?.port.postMessage({ type: "active", value: false });
 }
 
 export default function SignalSpectrum({ audioRef }: SignalSpectrumProps) {
@@ -109,11 +219,14 @@ export default function SignalSpectrum({ audioRef }: SignalSpectrumProps) {
     const resumeAudioContext = () => {
       if (context.state === "suspended") void context.resume().catch(() => undefined);
     };
+    const prepareCurrentTrack = () => { void prepareScratchTrack(audio); };
 
     const resizeObserver = new ResizeObserver(resizeCanvas);
     resizeObserver.observe(canvas);
     resizeCanvas();
     audio.addEventListener("play", resumeAudioContext);
+    audio.addEventListener("loadedmetadata", prepareCurrentTrack);
+    if (audio.readyState >= HTMLMediaElement.HAVE_METADATA) prepareCurrentTrack();
     window.addEventListener("pointerdown", resumeAudioContext, { passive: true });
     window.addEventListener("keydown", resumeAudioContext);
     frameId = window.requestAnimationFrame(draw);
@@ -122,6 +235,7 @@ export default function SignalSpectrum({ audioRef }: SignalSpectrumProps) {
       window.cancelAnimationFrame(frameId);
       resizeObserver.disconnect();
       audio.removeEventListener("play", resumeAudioContext);
+      audio.removeEventListener("loadedmetadata", prepareCurrentTrack);
       window.removeEventListener("pointerdown", resumeAudioContext);
       window.removeEventListener("keydown", resumeAudioContext);
     };
