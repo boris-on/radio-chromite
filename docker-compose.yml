@@ -15,6 +15,16 @@ services:
       frontend:
         condition: service_healthy
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 128
+    mem_limit: 256m
+    cpus: 0.50
+    logging:
+      driver: local
+      options:
+        max-size: "10m"
+        max-file: "10"
 
   backend:
     build:
@@ -43,6 +53,21 @@ services:
       - "8789"
 
     restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=128m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 128
+    mem_limit: 512m
+    cpus: 1.00
+    logging:
+      driver: local
+      options:
+        max-size: "10m"
+        max-file: "10"
 
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8789/api/health"]
@@ -71,6 +96,21 @@ services:
         condition: service_healthy
 
     restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=64m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 128
+    mem_limit: 512m
+    cpus: 1.00
+    logging:
+      driver: local
+      options:
+        max-size: "10m"
+        max-file: "10"
 
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/"]

@@ -1,0 +1,32 @@
+name: Security checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "17 4 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run security:audit
+      - run: npm run build
+
+  containers:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: MUSIC_LIBRARY_PATH=/tmp NORMALIZED_LIBRARY_PATH=/tmp docker compose config --quiet
+      - run: docker build --pull --no-cache -f Dockerfile.frontend -t radio-chromite-frontend:test .
+      - run: docker build --pull --no-cache -f Dockerfile.backend -t radio-chromite-backend:test .
